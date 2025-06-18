@@ -1,3 +1,4 @@
+
 "use client";
 
 import type * as React from 'react';
@@ -12,6 +13,7 @@ import { Slider } from "@/components/ui/slider"
 import { ShieldAlert, CircleDollarSign, PlusCircle, Trash2, TrendingUp } from 'lucide-react';
 import { convertToMinutes, formatTime } from '@/lib/timeUtils';
 import { useToast } from '@/hooks/use-toast';
+import { Decimal } from 'decimal.js';
 
 interface ProjectSettingsSectionProps {
   risks: Risk[];
@@ -20,7 +22,7 @@ interface ProjectSettingsSectionProps {
   setEffortMultiplier: (value: number) => void;
   hourlyRate: number;
   setHourlyRate: (value: number) => void;
-  totalBaseTimeInMinutes: number; // Sum of all task WAs + sum of all risk times
+  totalBaseTimeInMinutes: Decimal; // Sum of all task WAs + sum of all risk times
 }
 
 export default function ProjectSettingsSection({
@@ -40,13 +42,13 @@ export default function ProjectSettingsSection({
       toast({ title: "Incomplete risk details", description: "Please fill all risk fields.", variant: "destructive" });
       return;
     }
-    const riskTimeInMinutes = convertToMinutes(newRisk.timeEstimate, newRisk.timeUnit);
+    const riskTimeInMinutesDecimal = convertToMinutes(newRisk.timeEstimate, newRisk.timeUnit);
     const riskToAdd: Risk = {
       id: crypto.randomUUID(),
       description: newRisk.description,
       timeEstimate: newRisk.timeEstimate,
       timeUnit: newRisk.timeUnit,
-      riskTimeInMinutes,
+      riskTimeInMinutes: riskTimeInMinutesDecimal.toNumber(), // Store as number
     };
     setRisks(prev => [...prev, riskToAdd]);
     setNewRisk({});
@@ -56,8 +58,16 @@ export default function ProjectSettingsSection({
     setRisks(prev => prev.filter(r => r.id !== riskId));
   };
 
-  const totalAdjustedTimeInMinutes = totalBaseTimeInMinutes * effortMultiplier;
-  const totalProjectCost = (totalAdjustedTimeInMinutes / 60) * hourlyRate;
+  const totalBaseTimeDecimal = new Decimal(totalBaseTimeInMinutes);
+  const effortMultiplierDecimal = new Decimal(effortMultiplier);
+  const hourlyRateDecimal = new Decimal(hourlyRate);
+
+  const totalAdjustedTimeInMinutes = totalBaseTimeDecimal.times(effortMultiplierDecimal);
+  let totalProjectCost = new Decimal(0);
+  if (hourlyRateDecimal.greaterThan(0)) {
+    totalProjectCost = totalAdjustedTimeInMinutes.dividedBy(60).times(hourlyRateDecimal);
+  }
+
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -172,7 +182,7 @@ export default function ProjectSettingsSection({
         <CardFooter className="flex flex-col items-start space-y-3 bg-secondary/30 p-4 rounded-b-lg">
           <div className="w-full">
             <p className="text-sm text-muted-foreground">Base Estimated Time (Tasks + Risks):</p>
-            <p className="font-headline text-xl text-primary">{formatTime(totalBaseTimeInMinutes)}</p>
+            <p className="font-headline text-xl text-primary">{formatTime(totalBaseTimeDecimal)}</p>
           </div>
           <div className="w-full">
             <p className="text-sm text-muted-foreground">Total Adjusted Estimated Time (Factoring Multiplier):</p>
@@ -181,7 +191,7 @@ export default function ProjectSettingsSection({
           <div className="w-full pt-2 border-t border-border">
             <p className="text-sm text-muted-foreground">Estimated Project Cost:</p>
             <p className="font-headline text-3xl text-accent">
-              ${totalProjectCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              ${totalProjectCost.toFixed(2)}
             </p>
           </div>
         </CardFooter>

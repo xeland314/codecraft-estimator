@@ -1,4 +1,6 @@
 // This file is machine-generated - edit with caution!
+// This flow is superseded by generate-project-plan.ts and can be removed or kept for reference.
+// For this exercise, we will leave it but it's not actively used by the UI anymore.
 'use server';
 /**
  * @fileOverview An AI agent that generates software requirements documents.

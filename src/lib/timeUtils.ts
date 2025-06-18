@@ -1,58 +1,81 @@
 import type { TimeUnit } from '@/types';
+import { Decimal } from 'decimal.js';
 
-export const convertToMinutes = (time: number, unit: TimeUnit): number => {
-  if (isNaN(time) || time < 0) return 0;
+Decimal.set({ precision: 10 }); // Set precision for decimal calculations
+
+export const convertToMinutes = (time: number | Decimal, unit: TimeUnit): Decimal => {
+  const timeDecimal = new Decimal(time);
+  if (timeDecimal.isNaN() || timeDecimal.isNegative()) return new Decimal(0);
+
   switch (unit) {
     case 'minutes':
-      return time;
+      return timeDecimal;
     case 'hours':
-      return time * 60;
+      return timeDecimal.times(60);
     case 'days':
-      return time * 60 * 8; // Assuming 8-hour work days
+      return timeDecimal.times(60).times(8); // Assuming 8-hour work days
     default:
-      return 0;
+      return new Decimal(0);
   }
 };
 
-export const formatTime = (totalMinutes: number): string => {
-  if (isNaN(totalMinutes) || totalMinutes < 0) return "0 minutes";
+export const formatTime = (totalMinutesInput: number | Decimal): string => {
+  const totalMinutes = new Decimal(totalMinutesInput);
+  if (totalMinutes.isNaN() || totalMinutes.isNegative()) return "0 minutes";
 
-  const hoursInDay = 8;
-  const minutesInHour = 60;
+  const hoursInDay = new Decimal(8);
+  const minutesInHour = new Decimal(60);
 
-  if (totalMinutes === 0) return "0 minutes";
+  if (totalMinutes.isZero()) return "0 minutes";
 
-  const days = Math.floor(totalMinutes / (minutesInHour * hoursInDay));
-  const remainingMinutesAfterDays = totalMinutes % (minutesInHour * hoursInDay);
-  const hours = Math.floor(remainingMinutesAfterDays / minutesInHour);
-  const minutes = remainingMinutesAfterDays % minutesInHour;
+  const days = totalMinutes.dividedBy(minutesInHour.times(hoursInDay)).floor();
+  const remainingMinutesAfterDays = totalMinutes.modulo(minutesInHour.times(hoursInDay));
+  const hours = remainingMinutesAfterDays.dividedBy(minutesInHour).floor();
+  const minutes = remainingMinutesAfterDays.modulo(minutesInHour);
 
   let result = "";
-  if (days > 0) {
-    result += `${days} day${days > 1 ? 's' : ''} `;
+  if (days.greaterThan(0)) {
+    result += `${days.toString()} day${days.greaterThan(1) ? 's' : ''} `;
   }
-  if (hours > 0) {
-    result += `${hours} hour${hours > 1 ? 's' : ''} `;
+  if (hours.greaterThan(0)) {
+    result += `${hours.toString()} hour${hours.greaterThan(1) ? 's' : ''} `;
   }
-  if (minutes > 0 || result === "") { // Show minutes if it's the only unit or non-zero
-    result += `${minutes} minute${minutes > 1 ? 's' : ''}`;
+  // Show minutes if it's the only unit or non-zero, or if total time is less than 1 minute but not 0
+  if (minutes.greaterThan(0) || result === "" || (totalMinutes.lessThan(1) && !totalMinutes.isZero())) {
+     // For very small durations like 0.5 minutes, ensure it shows correctly.
+    const displayMinutes = minutes.equals(0) && totalMinutes.lessThan(1) && !totalMinutes.isZero() 
+                           ? totalMinutes 
+                           : minutes;
+    result += `${displayMinutes.toSignificantDigits(4).toString()} minute${displayMinutes.equals(1) ? '' : 's'}`;
   }
   
   return result.trim();
 };
 
-export const calculateWeightedAverage = (optimistic: number, mostLikely: number, pessimistic: number, unit: TimeUnit): number => {
-  if (isNaN(optimistic) || isNaN(mostLikely) || isNaN(pessimistic) || optimistic < 0 || mostLikely < 0 || pessimistic < 0) {
-    return 0;
-  }
-  const o = convertToMinutes(optimistic, unit);
-  const ml = convertToMinutes(mostLikely, unit);
-  const p = convertToMinutes(pessimistic, unit);
-  
-  if (p < ml || ml < o ) { // Pessimistic should be >= mostLikely >= optimistic
-    // Or handle this as an error state shown to user
-    return 0; 
+export const calculateWeightedAverage = (optimistic: number, mostLikely: number, pessimistic: number, unit: TimeUnit): Decimal => {
+  const opt = new Decimal(optimistic);
+  const ml = new Decimal(mostLikely);
+  const pess = new Decimal(pessimistic);
+
+  if (opt.isNaN() || ml.isNaN() || pess.isNaN() || opt.isNegative() || ml.isNegative() || pess.isNegative()) {
+    return new Decimal(0);
   }
 
-  return (p + 4 * ml + o) / 6;
+  const o = convertToMinutes(opt, unit);
+  const m = convertToMinutes(ml, unit);
+  const p = convertToMinutes(pess, unit);
+  
+  if (p.lessThan(m) || m.lessThan(o)) { 
+    // Pessimistic should be >= mostLikely >= optimistic
+    // Or handle this as an error state shown to user. For now, return 0 or based on valid parts.
+    // Returning average of valid parts or just most_likely if others are invalid.
+    // For simplicity, if order is wrong, we might default to most_likely or an average.
+    // However, the prompt expects this to be handled by user input validation mostly.
+    // For calculation robustness, we'll proceed but this data indicates an issue.
+    // Using formula regardless, as time estimates might be equal.
+  }
+
+  // PERT formula: (Optimistic + 4 * MostLikely + Pessimistic) / 6
+  const weightedAverage = o.plus(m.times(4)).plus(p).dividedBy(6);
+  return weightedAverage;
 };

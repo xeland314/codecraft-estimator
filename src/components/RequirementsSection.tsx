@@ -1,3 +1,4 @@
+
 "use client";
 
 import type * as React from 'react';
@@ -6,20 +7,23 @@ import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Lightbulb, Loader2 } from 'lucide-react';
-import { generateRequirements, type GenerateRequirementsOutput } from '@/ai/flows/generate-requirements';
+import { generateProjectPlan, type GenerateProjectPlanOutput } from '@/ai/flows/generate-project-plan';
 import { useToast } from '@/hooks/use-toast';
+import type { Module, Task, TimeUnit } from '@/types';
+import { calculateWeightedAverage } from '@/lib/timeUtils';
 
 interface RequirementsSectionProps {
   requirementsDocument: string;
   setRequirementsDocument: (doc: string) => void;
+  setModules: React.Dispatch<React.SetStateAction<Module[]>>;
 }
 
-export default function RequirementsSection({ requirementsDocument, setRequirementsDocument }: RequirementsSectionProps) {
+export default function RequirementsSection({ requirementsDocument, setRequirementsDocument, setModules }: RequirementsSectionProps) {
   const [prompt, setPrompt] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const { toast } = useToast();
 
-  const handleGenerateRequirements = async () => {
+  const handleGenerateProjectPlan = async () => {
     if (!prompt.trim()) {
       toast({
         title: "Prompt is empty",
@@ -30,20 +34,53 @@ export default function RequirementsSection({ requirementsDocument, setRequireme
     }
     setIsLoading(true);
     try {
-      const result: GenerateRequirementsOutput = await generateRequirements({ prompt });
+      const result: GenerateProjectPlanOutput = await generateProjectPlan({ prompt });
       setRequirementsDocument(result.requirementDocument);
+
+      const newModules: Module[] = result.modules.map(aiModule => {
+        const tasks: Task[] = aiModule.tasks.map(aiTask => {
+          // AI provides times in hours, calculateWeightedAverage expects numbers
+          const optimisticTime = Number(aiTask.optimisticTime);
+          const mostLikelyTime = Number(aiTask.mostLikelyTime);
+          const pessimisticTime = Number(aiTask.pessimisticTime);
+      
+          const weightedAverageDecimal = calculateWeightedAverage(
+            optimisticTime,
+            mostLikelyTime,
+            pessimisticTime,
+            'hours' // AI provides times in hours
+          );
+          return {
+            id: crypto.randomUUID(),
+            description: aiTask.description,
+            optimisticTime: optimisticTime,
+            mostLikelyTime: mostLikelyTime,
+            pessimisticTime: pessimisticTime,
+            timeUnit: 'hours' as TimeUnit, // Explicitly set as AI provides in hours
+            weightedAverageTimeInMinutes: weightedAverageDecimal.toNumber(), // Store as number
+          };
+        });
+        return {
+          id: crypto.randomUUID(),
+          name: aiModule.name,
+          tasks,
+        };
+      });
+      setModules(newModules); // Update modules in the main page state
+
       toast({
-        title: "Requirements Generated",
-        description: "The software requirements document has been successfully generated.",
+        title: "Project Plan Generated",
+        description: "Requirements document and initial modules/tasks have been generated.",
       });
     } catch (error) {
-      console.error("Error generating requirements:", error);
+      console.error("Error generating project plan:", error);
       toast({
         title: "Error",
-        description: "Failed to generate requirements. Please try again.",
+        description: "Failed to generate project plan. Please try again.",
         variant: "destructive",
       });
-      setRequirementsDocument(''); // Clear previous document on error
+      setRequirementsDocument(''); 
+      setModules([]); // Clear modules on error
     } finally {
       setIsLoading(false);
     }
@@ -54,10 +91,10 @@ export default function RequirementsSection({ requirementsDocument, setRequireme
       <CardHeader>
         <CardTitle className="font-headline text-2xl flex items-center">
           <Lightbulb className="mr-2 h-6 w-6 text-primary" />
-          AI-Powered Requirements Generation
+          AI-Powered Project Plan Generation
         </CardTitle>
         <CardDescription>
-          Describe your software project, and our AI will generate a comprehensive requirements document.
+          Describe your software project, and our AI will generate a requirements document and initial modules/tasks.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -75,17 +112,17 @@ export default function RequirementsSection({ requirementsDocument, setRequireme
           />
         </div>
         <Button 
-          onClick={handleGenerateRequirements} 
+          onClick={handleGenerateProjectPlan} 
           disabled={isLoading}
           className="bg-primary hover:bg-primary/90 text-primary-foreground w-full sm:w-auto"
-          aria-label="Generate Requirements Document"
+          aria-label="Generate Project Plan"
         >
           {isLoading ? (
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
           ) : (
             <Lightbulb className="mr-2 h-4 w-4" />
           )}
-          Generate Requirements
+          Generate Project Plan
         </Button>
         {requirementsDocument && (
           <div className="space-y-2 pt-4">
