@@ -31,6 +31,7 @@ export default function CodeCraftEstimatorPage() {
   const [effortMultiplier, setEffortMultiplier] = useState<number>(1.0);
   const [hourlyRate, setHourlyRate] = useState<number>(50);
   const [totalBaseTimeInMinutes, setTotalBaseTimeInMinutes] = useState<Decimal>(new Decimal(0));
+  const [totalTasksTimeInMinutes, setTotalTasksTimeInMinutes] = useState<Decimal>(new Decimal(0));
 
   const [savedProjects, setSavedProjects] = useState<Project[]>([]);
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
@@ -123,7 +124,8 @@ export default function CodeCraftEstimatorPage() {
         taskTotal = taskTotal.plus(new Decimal(task.weightedAverageTimeInMinutes));
       });
     });
-
+    setTotalTasksTimeInMinutes(taskTotal);
+  
     let riskTotal = new Decimal(0);
     risks.forEach(risk => {
       riskTotal = riskTotal.plus(new Decimal(risk.riskTimeInMinutes));
@@ -186,7 +188,7 @@ export default function CodeCraftEstimatorPage() {
     localStorage.setItem(SAVED_PROJECTS_KEY, JSON.stringify(newSavedProjects));
     setCurrentProjectId(newCurrentProjectId);
     setCurrentProjectName(newCurrentProjectName);
-    localStorage.setItem(CURRENT_PROJECT_ID_KEY, newCurrentProjectId);
+    localStorage.setItem(CURRENT_PROJECT_ID_KEY, newCurrentProjectId as string);
     setIsProjectsDialogOpen(false);
   }, [requirementsDocument, modules, risks, effortMultiplier, hourlyRate, totalBaseTimeInMinutes, savedProjects, currentProjectId, toast]);
 
@@ -363,6 +365,7 @@ export default function CodeCraftEstimatorPage() {
               hourlyRate={hourlyRate}
               setHourlyRate={setHourlyRate}
               totalBaseTimeInMinutes={totalBaseTimeInMinutes}
+              totalTasksTimeInMinutes={totalTasksTimeInMinutes}
             />
           </TabsContent>
            <TabsContent value="analytics">

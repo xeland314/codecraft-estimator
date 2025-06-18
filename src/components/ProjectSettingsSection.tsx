@@ -25,6 +25,7 @@ interface ProjectSettingsSectionProps {
   hourlyRate: number;
   setHourlyRate: (value: number) => void;
   totalBaseTimeInMinutes: Decimal;
+  totalTasksTimeInMinutes: Decimal;
 }
 
 export default function ProjectSettingsSection({
@@ -36,7 +37,8 @@ export default function ProjectSettingsSection({
   setEffortMultiplier,
   hourlyRate,
   setHourlyRate,
-  totalBaseTimeInMinutes
+  totalBaseTimeInMinutes,
+  totalTasksTimeInMinutes
 }: ProjectSettingsSectionProps) {
   const [newRisk, setNewRisk] = useState<Partial<Omit<Risk, 'id' | 'riskTimeInMinutes'>> & { timeEstimate?: number, timeUnit?: TimeUnit }>({ probability: 'Medium', impactSeverity: 'Medium' });
   const { toast } = useToast();
@@ -248,6 +250,10 @@ export default function ProjectSettingsSection({
           </div>
         </CardContent>
         <CardFooter className="flex flex-col items-start space-y-3 bg-secondary/30 p-4 rounded-b-lg">
+          <div className="w-full">
+            <p className="text-sm text-muted-foreground">First Estimated Time (Only Tasks):</p>
+            <p className="font-headline text-xl text-primary">{formatTime(totalTasksTimeInMinutes)}</p>
+          </div>
           <div className="w-full">
             <p className="text-sm text-muted-foreground">Base Estimated Time (Tasks + Risks):</p>
             <p className="font-headline text-xl text-primary">{formatTime(totalBaseTimeDecimal)}</p>
