@@ -101,7 +101,7 @@ export default function CodeCraftEstimatorPage() {
       <Header />
       <main className="flex-grow container mx-auto px-4 py-8">
         <Tabs defaultValue="requirements" className="w-full">
-          <TabsList className="grid w-full grid-cols-1 sm:grid-cols-3 mb-6 bg-card shadow-sm">
+          <TabsList className="grid w-full h-auto grid-cols-1 sm:grid-cols-3 mb-6 bg-card shadow-sm">
             <TabsTrigger value="requirements" className="py-3 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md">
               <Lightbulb className="mr-2 h-5 w-5" /> Requirements AI
             </TabsTrigger>
