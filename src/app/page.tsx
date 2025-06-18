@@ -125,6 +125,8 @@ export default function CodeCraftEstimatorPage() {
           </TabsContent>
           <TabsContent value="settings">
             <ProjectSettingsSection
+              requirementsDocument={requirementsDocument}
+              modules={modules}
               risks={risks}
               setRisks={setRisks}
               effortMultiplier={effortMultiplier}

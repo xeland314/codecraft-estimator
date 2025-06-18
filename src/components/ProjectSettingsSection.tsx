@@ -3,19 +3,21 @@
 
 import type * as React from 'react';
 import { useState } from 'react';
-import type { Risk, TimeUnit } from '@/types';
+import type { Module, Risk, TimeUnit } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Slider } from "@/components/ui/slider"
-import { ShieldAlert, CircleDollarSign, PlusCircle, Trash2, TrendingUp } from 'lucide-react';
+import { ShieldAlert, CircleDollarSign, PlusCircle, Trash2, TrendingUp, Save } from 'lucide-react';
 import { convertToMinutes, formatTime } from '@/lib/timeUtils';
 import { useToast } from '@/hooks/use-toast';
 import { Decimal } from 'decimal.js';
 
 interface ProjectSettingsSectionProps {
+  requirementsDocument: string;
+  modules: Module[];
   risks: Risk[];
   setRisks: React.Dispatch<React.SetStateAction<Risk[]>>;
   effortMultiplier: number;
@@ -26,6 +28,8 @@ interface ProjectSettingsSectionProps {
 }
 
 export default function ProjectSettingsSection({
+  requirementsDocument,
+  modules,
   risks,
   setRisks,
   effortMultiplier,
@@ -67,6 +71,53 @@ export default function ProjectSettingsSection({
   if (hourlyRateDecimal.greaterThan(0)) {
     totalProjectCost = totalAdjustedTimeInMinutes.dividedBy(60).times(hourlyRateDecimal);
   }
+
+  const handleSaveProject = () => {
+    const projectData = {
+      projectName: "CodeCraft Project Export",
+      exportDate: new Date().toISOString(),
+      requirementsDocument,
+      modules,
+      risks,
+      projectSettings: {
+        effortMultiplier,
+        hourlyRate,
+      },
+      projectSummary: {
+        totalBaseTimeInMinutes: totalBaseTimeDecimal.toString(),
+        totalBaseTimeFormatted: formatTime(totalBaseTimeDecimal),
+        totalAdjustedTimeInMinutes: totalAdjustedTimeInMinutes.toString(),
+        totalAdjustedTimeFormatted: formatTime(totalAdjustedTimeInMinutes),
+        totalProjectCost: totalProjectCost.toString(),
+        totalProjectCostFormatted: `$${totalProjectCost.toFixed(2)}`
+      }
+    };
+
+    try {
+      const jsonString = JSON.stringify(projectData, null, 2);
+      const blob = new Blob([jsonString], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'codecraft-project-export.json';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      toast({
+        title: "Project Saved",
+        description: "Your project data has been downloaded as a JSON file.",
+      });
+    } catch (error) {
+      console.error("Error saving project:", error);
+      toast({
+        title: "Error Saving Project",
+        description: "Could not save the project data. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
 
 
   return (
@@ -193,6 +244,12 @@ export default function ProjectSettingsSection({
             <p className="font-headline text-3xl text-accent">
               ${totalProjectCost.toFixed(2)}
             </p>
+          </div>
+          <div className="w-full pt-4 mt-4 border-t border-border">
+            <Button onClick={handleSaveProject} className="w-full bg-accent hover:bg-accent/90 text-accent-foreground">
+              <Save className="mr-2 h-5 w-5" /> Save Full Project (JSON)
+            </Button>
+            <p className="text-xs text-muted-foreground mt-2 text-center">This will download a JSON file containing all project data.</p>
           </div>
         </CardFooter>
       </Card>
