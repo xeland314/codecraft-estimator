@@ -123,15 +123,15 @@ export default function ProjectsDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl sm:max-w-2xl md:max-w-3xl lg:max-w-4xl">
-        <DialogHeader>
+      <DialogContent className="max-w-3xl sm:max-w-2xl md:max-w-3xl lg:max-w-4xl h-full">
+        <DialogHeader className="h-auto">
           <DialogTitle className="text-2xl font-headline">Manage Projects</DialogTitle>
           <DialogDescription>
             Load, save, import, or delete your projects. You can also start a new one.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 py-4 max-h-[70vh] overflow-y-auto">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 py-4 max-h-[75vh] overflow-y-auto">
           {/* Left Column: Project List */}
           <div className="md:col-span-2 space-y-4">
             <h3 className="text-lg font-semibold font-headline">Saved Projects</h3>
@@ -195,9 +195,9 @@ export default function ProjectsDialog({
 
           {/* Right Column: Actions */}
           <div className="space-y-6 border-l md:pl-6 flex flex-col">
-             <div>
-              <h3 className="text-lg font-semibold font-headline mb-2">Current Project</h3>
-              <Label htmlFor="project-name-input">Project Name</Label>
+             <div className="flex flex-col">
+              <h3 className="text-lg font-semibold font-headline mb-4">Current Project</h3>
+              <Label htmlFor="project-name-input" className="mb-2">Project Name</Label>
               <Input
                 id="project-name-input"
                 value={projectNameInput}
@@ -205,7 +205,7 @@ export default function ProjectsDialog({
                 placeholder="Enter project name"
                 className="mb-3"
               />
-              <Button onClick={handleSave} className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
+              <Button onClick={handleSave} className="w-full h-auto bg-primary hover:bg-primary/90 text-primary-foreground">
                 <Save className="h-4 w-4 mr-2" /> {currentProjectId ? 'Save Current Project' : 'Save as New Project'}
               </Button>
                {currentProjectId && (
@@ -218,7 +218,7 @@ export default function ProjectsDialog({
                 </p>
             </div>
             
-            <div className="border-t pt-6 mt-auto">
+            <div className="border-t pt-4 mt-auto">
               <h3 className="text-lg font-semibold font-headline mb-2">Other Actions</h3>
               <Button onClick={onNewProject} variant="outline" className="w-full mb-2">
                 <FilePlus2 className="h-4 w-4 mr-2" /> Start New Blank Project
