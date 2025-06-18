@@ -13,7 +13,7 @@ export const convertToMinutes = (time: number | Decimal, unit: TimeUnit): Decima
     case 'hours':
       return timeDecimal.times(60);
     case 'days':
-      return timeDecimal.times(60).times(8); // Assuming 8-hour work days
+      return timeDecimal.times(60).times(24); // Assuming 8-hour work days
     default:
       return new Decimal(0);
   }
@@ -23,7 +23,7 @@ export const formatTime = (totalMinutesInput: number | Decimal): string => {
   const totalMinutes = new Decimal(totalMinutesInput);
   if (totalMinutes.isNaN() || totalMinutes.isNegative()) return "0 minutes";
 
-  const hoursInDay = new Decimal(8);
+  const hoursInDay = new Decimal(24);
   const minutesInHour = new Decimal(60);
 
   if (totalMinutes.isZero()) return "0 minutes";
