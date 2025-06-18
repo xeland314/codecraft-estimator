@@ -1,3 +1,4 @@
+
 "use client";
 
 import type * as React from 'react';
@@ -249,8 +250,10 @@ export default function ModulesSection({ modules, setModules }: ModulesSectionPr
               <AccordionTrigger className="px-4 py-3 hover:bg-secondary/50 rounded-t-lg">
                 <div className="flex justify-between items-center w-full">
                   <span className="font-headline text-lg text-primary">{module.name}</span>
-                  <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); handleDeleteModule(module.id); }} className="text-destructive hover:bg-destructive/10">
-                    <Trash2 className="h-4 w-4" />
+                  <Button asChild variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); handleDeleteModule(module.id); }} className="text-destructive hover:bg-destructive/10">
+                    <div>
+                      <Trash2 className="h-4 w-4" />
+                    </div>
                   </Button>
                 </div>
               </AccordionTrigger>
