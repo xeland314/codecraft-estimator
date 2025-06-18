@@ -2,7 +2,7 @@
 "use client";
 
 import type * as React from 'react';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import type { Project, ProjectData } from '@/types';
 import {
   Dialog,
@@ -18,7 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { FilePlus2, Trash2, FolderOpen, Save, FileUp, AlertTriangle } from 'lucide-react';
+import { FilePlus2, Trash2, FolderOpen, Save, FileUp, Upload } from 'lucide-react';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 
@@ -30,9 +30,10 @@ interface ProjectsDialogProps {
   currentProjectName: string | null;
   currentProjectData: ProjectData | null;
   onLoadProject: (projectId: string) => void;
-  onSaveProject: (name: string, projectData: ProjectData) => void; // projectData is the current workspace data
+  onSaveProject: (name: string, projectData: ProjectData) => void;
   onNewProject: () => void;
   onDeleteProject: (projectId: string) => void;
+  onImportProject: (fileContent: string) => void;
 }
 
 const ITEMS_PER_PAGE = 10;
@@ -48,10 +49,12 @@ export default function ProjectsDialog({
   onSaveProject,
   onNewProject,
   onDeleteProject,
+  onImportProject,
 }: ProjectsDialogProps) {
   const [projectNameInput, setProjectNameInput] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const { toast } = useToast();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -89,6 +92,32 @@ export default function ProjectsDialog({
       onDeleteProject(projectId);
     }
   };
+
+  const handleImportClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileSelected = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      if (file.type !== 'application/json') {
+        toast({ title: "Invalid File Type", description: "Please select a JSON file (.json).", variant: "destructive" });
+        if (event.target) event.target.value = ""; // Reset file input
+        return;
+      }
+      try {
+        const fileContent = await file.text();
+        onImportProject(fileContent);
+        // onOpenChange(true); // Ensure dialog stays open or re-opens
+      } catch (readError) {
+        console.error("Error reading file:", readError);
+        toast({ title: "File Read Error", description: "Could not read the selected file.", variant: "destructive" });
+      }
+      if (event.target) {
+        event.target.value = ""; // Reset file input to allow re-selection of the same file
+      }
+    }
+  };
   
   if (!isOpen) return null;
 
@@ -98,7 +127,7 @@ export default function ProjectsDialog({
         <DialogHeader>
           <DialogTitle className="text-2xl font-headline">Manage Projects</DialogTitle>
           <DialogDescription>
-            Load, save, or delete your projects. You can also start a new one.
+            Load, save, import, or delete your projects. You can also start a new one.
           </DialogDescription>
         </DialogHeader>
 
@@ -191,10 +220,20 @@ export default function ProjectsDialog({
             
             <div className="border-t pt-6 mt-auto">
               <h3 className="text-lg font-semibold font-headline mb-2">Other Actions</h3>
-              <Button onClick={onNewProject} variant="outline" className="w-full">
+              <Button onClick={onNewProject} variant="outline" className="w-full mb-2">
                 <FilePlus2 className="h-4 w-4 mr-2" /> Start New Blank Project
               </Button>
-              <p className="text-xs text-muted-foreground mt-1">This will clear your current workspace.</p>
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileSelected}
+                accept=".json"
+                className="hidden"
+              />
+              <Button onClick={handleImportClick} variant="outline" className="w-full">
+                <Upload className="h-4 w-4 mr-2" /> Import Project (JSON)
+              </Button>
+              <p className="text-xs text-muted-foreground mt-1">Import clears current workspace if successful and adds to saved projects.</p>
             </div>
           </div>
         </div>

@@ -9,14 +9,13 @@ import ProjectSettingsSection from '@/components/ProjectSettingsSection';
 import ProjectsDialog from '@/components/ProjectsDialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Lightbulb, LayoutGrid, Settings } from 'lucide-react';
-import type { Module, Risk, Project, ProjectData } from '@/types';
+import type { Module, Risk, Project, ProjectData, Task } from '@/types';
 import { Decimal } from 'decimal.js';
 import { useToast } from '@/hooks/use-toast';
 
 const SAVED_PROJECTS_KEY = "codecraftEstimatorSavedProjects";
-const CURRENT_PROJECT_ID_KEY = "codecraftEstimatorCurrentProjectId_v2"; // v2 to avoid conflicts with old single project save
+const CURRENT_PROJECT_ID_KEY = "codecraftEstimatorCurrentProjectId_v2"; 
 
-// Keys for individual pieces of the current working project
 const REQ_DOC_KEY = 'requirementsDocument';
 const MODULES_KEY = 'modules';
 const RISKS_KEY = 'risks';
@@ -39,7 +38,6 @@ export default function CodeCraftEstimatorPage() {
 
   const { toast } = useToast();
 
-  // Load saved projects list and current project ID from localStorage on mount
   useEffect(() => {
     const projectsFromStorage = localStorage.getItem(SAVED_PROJECTS_KEY);
     if (projectsFromStorage) {
@@ -55,14 +53,12 @@ export default function CodeCraftEstimatorPage() {
         setCurrentProjectId(projectToLoad.id);
         setCurrentProjectName(projectToLoad.name);
       } else {
-        // If current project ID exists but project not found, load default workspace
         loadWorkspaceData();
-        setCurrentProjectId(null); // Clear invalid project ID
+        setCurrentProjectId(null); 
         setCurrentProjectName(null);
         localStorage.removeItem(CURRENT_PROJECT_ID_KEY);
       }
     } else {
-      // No active project ID, load default workspace data
       loadWorkspaceData();
     }
   }, []);
@@ -102,7 +98,6 @@ export default function CodeCraftEstimatorPage() {
     if (savedRate) setHourlyRate(JSON.parse(savedRate));
   };
 
-  // Autosave current workspace (individual items)
   useEffect(() => { localStorage.setItem(REQ_DOC_KEY, JSON.stringify(requirementsDocument)); }, [requirementsDocument]);
   useEffect(() => { localStorage.setItem(MODULES_KEY, JSON.stringify(modules)); }, [modules]);
   useEffect(() => { localStorage.setItem(RISKS_KEY, JSON.stringify(risks)); }, [risks]);
@@ -110,7 +105,6 @@ export default function CodeCraftEstimatorPage() {
   useEffect(() => { localStorage.setItem(RATE_KEY, JSON.stringify(hourlyRate)); }, [hourlyRate]);
 
 
-  // Calculate total base time
   useEffect(() => {
     let taskTotal = new Decimal(0);
     modules.forEach(module => {
@@ -134,7 +128,6 @@ export default function CodeCraftEstimatorPage() {
     setRisks(projectData.risks.map(r => ({...r, riskTimeInMinutes: Number(r.riskTimeInMinutes)})));
     setEffortMultiplier(projectData.effortMultiplier);
     setHourlyRate(projectData.hourlyRate);
-    // totalBaseTimeInMinutes will be recalculated by its own useEffect when modules/risks change
   };
 
   const handleSaveCurrentProject = useCallback((name: string) => {
@@ -158,20 +151,20 @@ export default function CodeCraftEstimatorPage() {
     let newCurrentProjectId = currentProjectId;
     let newCurrentProjectName = name;
 
-    if (currentProjectId) { // Update existing project
+    if (currentProjectId) { 
       const projectIndex = savedProjects.findIndex(p => p.id === currentProjectId);
       if (projectIndex > -1) {
         const updatedProject = { ...savedProjects[projectIndex], ...projectDataToSave, name, updatedAt: now };
         newSavedProjects = [...savedProjects];
         newSavedProjects[projectIndex] = updatedProject;
         toast({ title: "Project Updated", description: `Project "${name}" has been updated.` });
-      } else { // ID exists but not in list (edge case), save as new
+      } else { 
         newCurrentProjectId = crypto.randomUUID();
         const newProject: Project = { ...projectDataToSave, id: newCurrentProjectId, name, createdAt: now, updatedAt: now };
         newSavedProjects = [...savedProjects, newProject];
-        toast({ title: "Project Saved", description: `Project "${name}" has been saved.` });
+        toast({ title: "Project Saved", description: `Project "${name}" has been saved as a new project (original ID not found).` });
       }
-    } else { // Save as new project
+    } else { 
       newCurrentProjectId = crypto.randomUUID();
       const newProject: Project = { ...projectDataToSave, id: newCurrentProjectId, name, createdAt: now, updatedAt: now };
       newSavedProjects = [...savedProjects, newProject];
@@ -206,12 +199,10 @@ export default function CodeCraftEstimatorPage() {
     setRisks([]);
     setEffortMultiplier(1.0);
     setHourlyRate(50);
-    // totalBaseTimeInMinutes will reset via its useEffect
     setCurrentProjectId(null);
     setCurrentProjectName(null);
     localStorage.removeItem(CURRENT_PROJECT_ID_KEY);
     
-    // Clear individual workspace items from localStorage
     localStorage.removeItem(REQ_DOC_KEY);
     localStorage.removeItem(MODULES_KEY);
     localStorage.removeItem(RISKS_KEY);
@@ -232,13 +223,78 @@ export default function CodeCraftEstimatorPage() {
     toast({ title: "Project Deleted", description: `Project "${projectToDelete.name}" has been deleted.` });
 
     if (currentProjectId === projectId) {
-      handleNewProject(); // If current project deleted, start a new one
+      handleNewProject(); 
     }
   }, [savedProjects, currentProjectId, toast, handleNewProject]);
+
+  const handleImportProjectFromFile = useCallback((fileContent: string) => {
+    try {
+      const importedRaw = JSON.parse(fileContent);
+
+      if (
+        typeof importedRaw.requirementsDocument !== 'string' ||
+        !Array.isArray(importedRaw.modules) ||
+        !Array.isArray(importedRaw.risks) ||
+        typeof importedRaw.effortMultiplier !== 'number' ||
+        typeof importedRaw.hourlyRate !== 'number'
+      ) {
+        toast({ title: "Invalid Project File", description: "The file is not a valid CodeCraft project.", variant: "destructive" });
+        return;
+      }
+  
+      const importedData = importedRaw as Partial<ProjectData & { name?: string, id?: string, createdAt?: string, updatedAt?: string }>;
+  
+      // Ensure modules and tasks have IDs and correct numeric types
+      const validatedModules: Module[] = (importedData.modules || []).map((m: any) => ({
+        id: m.id || crypto.randomUUID(),
+        name: m.name || "Untitled Module",
+        tasks: (m.tasks || []).map((t: any) => ({
+          id: t.id || crypto.randomUUID(),
+          description: t.description || "Untitled Task",
+          optimisticTime: Number(t.optimisticTime || 0),
+          mostLikelyTime: Number(t.mostLikelyTime || 0),
+          pessimisticTime: Number(t.pessimisticTime || 0),
+          timeUnit: t.timeUnit || 'hours',
+          weightedAverageTimeInMinutes: Number(t.weightedAverageTimeInMinutes || 0),
+        } as Task)),
+      }));
+
+      const validatedRisks: Risk[] = (importedData.risks || []).map((r: any) => ({
+        id: r.id || crypto.randomUUID(),
+        description: r.description || "Untitled Risk",
+        timeEstimate: Number(r.timeEstimate || 0),
+        timeUnit: r.timeUnit || 'hours',
+        riskTimeInMinutes: Number(r.riskTimeInMinutes || 0),
+      } as Risk));
+
+      const newProject: Project = {
+        id: crypto.randomUUID(), 
+        name: importedData.name || `Imported Project - ${new Date().toLocaleDateString()}`,
+        requirementsDocument: importedData.requirementsDocument,
+        modules: validatedModules,
+        risks: validatedRisks,
+        effortMultiplier: importedData.effortMultiplier,
+        hourlyRate: importedData.hourlyRate,
+        totalBaseTimeInMinutes: String(importedData.totalBaseTimeInMinutes || '0'),
+        totalAdjustedTimeInMinutes: String(importedData.totalAdjustedTimeInMinutes || '0'),
+        totalProjectCost: String(importedData.totalProjectCost || '0'),
+        createdAt: importedData.createdAt && !isNaN(new Date(importedData.createdAt).getTime()) ? importedData.createdAt : new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+  
+      const newSavedProjects = [...savedProjects, newProject];
+      setSavedProjects(newSavedProjects);
+      localStorage.setItem(SAVED_PROJECTS_KEY, JSON.stringify(newSavedProjects));
+      toast({ title: "Project Imported", description: `Project "${newProject.name}" added. You can load it now.` });
+      setIsProjectsDialogOpen(true); // Keep dialog open
+    } catch (error) {
+      console.error("Error importing project:", error);
+      toast({ title: "Import Error", description: "Could not parse or import. Ensure it's valid JSON.", variant: "destructive" });
+    }
+  }, [savedProjects, toast]);
   
   const getCurrentProjectDataForDialog = (): ProjectData | null => {
     if (!currentProjectId && !requirementsDocument && modules.length === 0 && risks.length === 0) {
-        // Truly new/empty project
         return null;
     }
     const totalAdjustedTime = totalBaseTimeInMinutes.times(new Decimal(effortMultiplier));
@@ -289,10 +345,10 @@ export default function CodeCraftEstimatorPage() {
           </TabsContent>
           <TabsContent value="settings">
             <ProjectSettingsSection
-              projectData={getCurrentProjectDataForDialog()} // Pass all current data for export
-              modules={modules} // Keep for consistency if PS uses it directly
-              risks={risks} // Keep for consistency
-              setRisks={setRisks} // Keep for consistency
+              projectData={getCurrentProjectDataForDialog()} 
+              modules={modules} 
+              risks={risks} 
+              setRisks={setRisks} 
               effortMultiplier={effortMultiplier}
               setEffortMultiplier={setEffortMultiplier}
               hourlyRate={hourlyRate}
@@ -316,6 +372,7 @@ export default function CodeCraftEstimatorPage() {
         onSaveProject={handleSaveCurrentProject}
         onNewProject={handleNewProject}
         onDeleteProject={handleDeleteProject}
+        onImportProject={handleImportProjectFromFile}
       />
     </div>
   );
