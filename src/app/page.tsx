@@ -6,11 +6,11 @@ import Header from '@/components/Header';
 import RequirementsSection from '@/components/RequirementsSection';
 import ModulesSection from '@/components/ModulesSection';
 import ProjectSettingsSection from '@/components/ProjectSettingsSection';
-import AnalyticsSection from '@/components/AnalyticsSection'; // New Import
+import AnalyticsSection from '@/components/AnalyticsSection'; 
 import ProjectsDialog from '@/components/ProjectsDialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Lightbulb, LayoutGrid, Settings, AreaChart } from 'lucide-react'; // Added AreaChart icon
-import type { Module, Risk, Project, ProjectData, Task } from '@/types';
+import { Lightbulb, LayoutGrid, Settings, AreaChart } from 'lucide-react';
+import type { Module, Risk, Project, ProjectData, Task, RiskLevel } from '@/types';
 import { Decimal } from 'decimal.js';
 import { useToast } from '@/hooks/use-toast';
 
@@ -39,15 +39,30 @@ export default function CodeCraftEstimatorPage() {
 
   const { toast } = useToast();
 
+  const validateAndUpgradeRisks = (risksArray: any[]): Risk[] => {
+    return risksArray.map(risk => ({
+      ...risk,
+      id: risk.id || crypto.randomUUID(),
+      probability: risk.probability || 'Medium', // Default if missing
+      impactSeverity: risk.impactSeverity || 'Medium', // Default if missing
+      riskTimeInMinutes: typeof risk.riskTimeInMinutes === 'string' ? parseFloat(risk.riskTimeInMinutes) : risk.riskTimeInMinutes,
+    }));
+  };
+
   useEffect(() => {
     const projectsFromStorage = localStorage.getItem(SAVED_PROJECTS_KEY);
     if (projectsFromStorage) {
-      setSavedProjects(JSON.parse(projectsFromStorage));
+      const parsedProjects = JSON.parse(projectsFromStorage) as Project[];
+      const upgradedProjects = parsedProjects.map(p => ({
+        ...p,
+        risks: validateAndUpgradeRisks(p.risks || []),
+      }));
+      setSavedProjects(upgradedProjects);
     }
 
     const activeProjectId = localStorage.getItem(CURRENT_PROJECT_ID_KEY);
     if (activeProjectId) {
-      const projects = projectsFromStorage ? JSON.parse(projectsFromStorage) : [];
+      const projects = projectsFromStorage ? JSON.parse(projectsFromStorage) as Project[] : [];
       const projectToLoad = projects.find((p: Project) => p.id === activeProjectId);
       if (projectToLoad) {
         loadProjectDataIntoState(projectToLoad);
@@ -83,13 +98,8 @@ export default function CodeCraftEstimatorPage() {
     
     const savedRisksData = localStorage.getItem(RISKS_KEY);
      if (savedRisksData) {
-        const parsedRisks = JSON.parse(savedRisksData) as Risk[];
-        parsedRisks.forEach(risk => {
-            if (typeof risk.riskTimeInMinutes !== 'number') {
-                risk.riskTimeInMinutes = parseFloat(String(risk.riskTimeInMinutes));
-            }
-        });
-        setRisks(parsedRisks);
+        const parsedRisks = JSON.parse(savedRisksData) as any[]; // Load as any first
+        setRisks(validateAndUpgradeRisks(parsedRisks));
     }
 
     const savedMultiplier = localStorage.getItem(MULTIPLIER_KEY);
@@ -126,7 +136,7 @@ export default function CodeCraftEstimatorPage() {
   const loadProjectDataIntoState = (projectData: ProjectData) => {
     setRequirementsDocument(projectData.requirementsDocument);
     setModules(projectData.modules.map(m => ({...m, tasks: m.tasks.map(t => ({...t, weightedAverageTimeInMinutes: Number(t.weightedAverageTimeInMinutes)}))})));
-    setRisks(projectData.risks.map(r => ({...r, riskTimeInMinutes: Number(r.riskTimeInMinutes)})));
+    setRisks(validateAndUpgradeRisks(projectData.risks));
     setEffortMultiplier(projectData.effortMultiplier);
     setHourlyRate(projectData.hourlyRate);
   };
@@ -140,7 +150,7 @@ export default function CodeCraftEstimatorPage() {
     const projectDataToSave: ProjectData = {
       requirementsDocument,
       modules,
-      risks,
+      risks: validateAndUpgradeRisks(risks), // Ensure risks are in the latest format
       effortMultiplier,
       hourlyRate,
       totalBaseTimeInMinutes: totalBaseTimeInMinutes.toString(),
@@ -258,14 +268,10 @@ export default function CodeCraftEstimatorPage() {
           weightedAverageTimeInMinutes: Number(t.weightedAverageTimeInMinutes || 0),
         } as Task)),
       }));
+      
+      // Use the validation/upgrade function for risks
+      const validatedRisks: Risk[] = validateAndUpgradeRisks(importedData.risks || []);
 
-      const validatedRisks: Risk[] = (importedData.risks || []).map((r: any) => ({
-        id: r.id || crypto.randomUUID(),
-        description: r.description || "Untitled Risk",
-        timeEstimate: Number(r.timeEstimate || 0),
-        timeUnit: r.timeUnit || 'hours',
-        riskTimeInMinutes: Number(r.riskTimeInMinutes || 0),
-      } as Risk));
 
       const newProject: Project = {
         id: crypto.randomUUID(), 
@@ -303,7 +309,7 @@ export default function CodeCraftEstimatorPage() {
     return {
         requirementsDocument,
         modules,
-        risks,
+        risks: validateAndUpgradeRisks(risks), // Ensure risks are current
         effortMultiplier,
         hourlyRate,
         totalBaseTimeInMinutes: totalBaseTimeInMinutes.toString(),

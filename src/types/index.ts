@@ -16,12 +16,27 @@ export interface Module {
   tasks: Task[];
 }
 
+export type RiskLevel = 'Low' | 'Medium' | 'High';
+
+export const riskLevelToNumber = (level: RiskLevel | undefined): number => {
+  if (!level) return 2; // Default to Medium
+  switch (level) {
+    case 'Low': return 1;
+    case 'Medium': return 2;
+    case 'High': return 3;
+    default: return 2;
+  }
+};
+
+
 export interface Risk {
   id: string;
   description: string;
-  timeEstimate: number;
-  timeUnit: TimeUnit;
-  riskTimeInMinutes: number;
+  timeEstimate: number; // Original time impact magnitude
+  timeUnit: TimeUnit;   // Unit for timeEstimate
+  riskTimeInMinutes: number; // Calculated time impact in minutes
+  probability: RiskLevel;
+  impactSeverity: RiskLevel;
 }
 
 // Represents the core data of a project, used for saving and loading

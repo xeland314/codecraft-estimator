@@ -3,7 +3,7 @@
 
 import type * as React from 'react';
 import { useState } from 'react';
-import type { Module, Risk, TimeUnit, ProjectData } from '@/types';
+import type { Module, Risk, TimeUnit, ProjectData, RiskLevel } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -16,20 +16,20 @@ import { useToast } from '@/hooks/use-toast';
 import { Decimal } from 'decimal.js';
 
 interface ProjectSettingsSectionProps {
-  projectData: ProjectData | null; // All data of the current project for export
-  modules: Module[]; // Kept for direct display/manipulation if any, though risks are primary here
+  projectData: ProjectData | null;
+  modules: Module[];
   risks: Risk[];
   setRisks: React.Dispatch<React.SetStateAction<Risk[]>>;
   effortMultiplier: number;
   setEffortMultiplier: (value: number) => void;
   hourlyRate: number;
   setHourlyRate: (value: number) => void;
-  totalBaseTimeInMinutes: Decimal; // Sum of all task WAs + sum of all risk times
+  totalBaseTimeInMinutes: Decimal;
 }
 
 export default function ProjectSettingsSection({
   projectData,
-  modules, // modules is part of projectData, but kept if direct manipulation is needed
+  modules,
   risks,
   setRisks,
   effortMultiplier,
@@ -38,12 +38,12 @@ export default function ProjectSettingsSection({
   setHourlyRate,
   totalBaseTimeInMinutes
 }: ProjectSettingsSectionProps) {
-  const [newRisk, setNewRisk] = useState<Partial<Risk>>({});
+  const [newRisk, setNewRisk] = useState<Partial<Omit<Risk, 'id' | 'riskTimeInMinutes'>> & { timeEstimate?: number, timeUnit?: TimeUnit }>({ probability: 'Medium', impactSeverity: 'Medium' });
   const { toast } = useToast();
 
   const handleAddRisk = () => {
-    if (!newRisk.description?.trim() || newRisk.timeEstimate == null || !newRisk.timeUnit) {
-      toast({ title: "Incomplete risk details", description: "Please fill all risk fields.", variant: "destructive" });
+    if (!newRisk.description?.trim() || newRisk.timeEstimate == null || !newRisk.timeUnit || !newRisk.probability || !newRisk.impactSeverity) {
+      toast({ title: "Incomplete risk details", description: "Please fill all risk fields, including probability and impact.", variant: "destructive" });
       return;
     }
     const riskTimeInMinutesDecimal = convertToMinutes(newRisk.timeEstimate, newRisk.timeUnit);
@@ -52,10 +52,12 @@ export default function ProjectSettingsSection({
       description: newRisk.description,
       timeEstimate: newRisk.timeEstimate,
       timeUnit: newRisk.timeUnit,
-      riskTimeInMinutes: riskTimeInMinutesDecimal.toNumber(), // Store as number
+      riskTimeInMinutes: riskTimeInMinutesDecimal.toNumber(),
+      probability: newRisk.probability,
+      impactSeverity: newRisk.impactSeverity,
     };
     setRisks(prev => [...prev, riskToAdd]);
-    setNewRisk({});
+    setNewRisk({ probability: 'Medium', impactSeverity: 'Medium' }); // Reset with defaults
   };
 
   const handleDeleteRisk = (riskId: string) => {
@@ -82,7 +84,6 @@ export default function ProjectSettingsSection({
       return;
     }
     
-    // Enhance projectData with formatted summaries for export consistency
     const exportableProjectData = {
       ...projectData,
       projectSummary: {
@@ -93,10 +94,7 @@ export default function ProjectSettingsSection({
         totalProjectCost: totalProjectCost.toString(),
         totalProjectCostFormatted: `$${totalProjectCost.toFixed(2)}`
       },
-      // Add modules and risks again if they are not already perfectly captured in projectData
-      // For this setup, projectData should already have them from page.tsx
     };
-
 
     try {
       const jsonString = JSON.stringify(exportableProjectData, null, 2);
@@ -124,6 +122,7 @@ export default function ProjectSettingsSection({
     }
   };
 
+  const riskLevels: RiskLevel[] = ['Low', 'Medium', 'High'];
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -134,11 +133,11 @@ export default function ProjectSettingsSection({
             Risk & Complexity Adjustment
           </CardTitle>
           <CardDescription>
-            Account for potential project risks and overall complexity.
+            Account for potential project risks and overall complexity. Define risk probability and impact.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="space-y-2 p-4 border border-border rounded-lg bg-secondary/30">
+          <div className="space-y-3 p-4 border border-border rounded-lg bg-secondary/30">
             <h3 className="font-headline text-lg">Add New Risk</h3>
             <Input 
               placeholder="Risk description (e.g., Third-party API integration delay)" 
@@ -146,21 +145,35 @@ export default function ProjectSettingsSection({
               onChange={(e) => setNewRisk(prev => ({ ...prev, description: e.target.value }))} 
               className="focus:ring-accent"
             />
-            <div className="flex gap-2 items-end">
+            <div className="grid grid-cols-2 gap-2">
               <Input 
                 type="number" 
                 placeholder="Time Est." 
                 value={newRisk.timeEstimate || ''} 
                 onChange={(e) => setNewRisk(prev => ({ ...prev, timeEstimate: Number(e.target.value) }))} 
-                className="w-1/2 focus:ring-accent"
+                className="focus:ring-accent"
                 min="0"
               />
               <Select onValueChange={(val) => setNewRisk(prev => ({ ...prev, timeUnit: val as TimeUnit }))} value={newRisk.timeUnit || ''}>
-                <SelectTrigger className="w-1/2 focus:ring-accent"><SelectValue placeholder="Unit" /></SelectTrigger>
+                <SelectTrigger className="focus:ring-accent"><SelectValue placeholder="Time Unit" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="minutes">Minutes</SelectItem>
                   <SelectItem value="hours">Hours</SelectItem>
                   <SelectItem value="days">Days</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+             <div className="grid grid-cols-2 gap-2">
+              <Select onValueChange={(val) => setNewRisk(prev => ({ ...prev, probability: val as RiskLevel }))} value={newRisk.probability || 'Medium'}>
+                <SelectTrigger className="focus:ring-accent"><SelectValue placeholder="Probability" /></SelectTrigger>
+                <SelectContent>
+                  {riskLevels.map(level => <SelectItem key={level} value={level}>{level}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <Select onValueChange={(val) => setNewRisk(prev => ({ ...prev, impactSeverity: val as RiskLevel }))} value={newRisk.impactSeverity || 'Medium'}>
+                <SelectTrigger className="focus:ring-accent"><SelectValue placeholder="Impact" /></SelectTrigger>
+                <SelectContent>
+                  {riskLevels.map(level => <SelectItem key={level} value={level}>{level}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -172,12 +185,14 @@ export default function ProjectSettingsSection({
           {risks.length > 0 && (
             <div className="space-y-2">
               <h3 className="font-headline text-lg">Identified Risks:</h3>
-              <ul className="space-y-2 max-h-60 overflow-y-auto">
+              <ul className="space-y-2 max-h-60 overflow-y-auto pr-2">
                 {risks.map(risk => (
                   <li key={risk.id} className="p-3 border border-border rounded-md bg-background shadow-sm flex justify-between items-center">
                     <div>
                       <p className="font-medium text-foreground">{risk.description}</p>
-                      <p className="text-xs text-muted-foreground">Est. Impact: {formatTime(risk.riskTimeInMinutes)}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Impact Time: {formatTime(risk.riskTimeInMinutes)} | P: {risk.probability} | I: {risk.impactSeverity}
+                      </p>
                     </div>
                     <Button onClick={() => handleDeleteRisk(risk.id)} variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10">
                       <Trash2 className="h-4 w-4" />
