@@ -167,12 +167,14 @@ export default function ProjectSettingsSection({
             </div>
              <div className="grid grid-cols-2 gap-2">
               <Select onValueChange={(val) => setNewRisk(prev => ({ ...prev, probability: val as RiskLevel }))} value={newRisk.probability || 'Medium'}>
+                <Label className="font-headline text-lg">Probability</Label>
                 <SelectTrigger className="focus:ring-accent"><SelectValue placeholder="Probability" /></SelectTrigger>
                 <SelectContent>
                   {riskLevels.map(level => <SelectItem key={level} value={level}>{level}</SelectItem>)}
                 </SelectContent>
               </Select>
               <Select onValueChange={(val) => setNewRisk(prev => ({ ...prev, impactSeverity: val as RiskLevel }))} value={newRisk.impactSeverity || 'Medium'}>
+                <Label className="font-headline text-lg">Impact Severity</Label>
                 <SelectTrigger className="focus:ring-accent"><SelectValue placeholder="Impact" /></SelectTrigger>
                 <SelectContent>
                   {riskLevels.map(level => <SelectItem key={level} value={level}>{level}</SelectItem>)}
