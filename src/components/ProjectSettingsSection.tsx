@@ -3,21 +3,21 @@
 
 import type * as React from 'react';
 import { useState } from 'react';
-import type { Module, Risk, TimeUnit } from '@/types';
+import type { Module, Risk, TimeUnit, ProjectData } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Slider } from "@/components/ui/slider"
-import { ShieldAlert, CircleDollarSign, PlusCircle, Trash2, TrendingUp, Save } from 'lucide-react';
+import { ShieldAlert, CircleDollarSign, PlusCircle, Trash2, TrendingUp, Download } from 'lucide-react';
 import { convertToMinutes, formatTime } from '@/lib/timeUtils';
 import { useToast } from '@/hooks/use-toast';
 import { Decimal } from 'decimal.js';
 
 interface ProjectSettingsSectionProps {
-  requirementsDocument: string;
-  modules: Module[];
+  projectData: ProjectData | null; // All data of the current project for export
+  modules: Module[]; // Kept for direct display/manipulation if any, though risks are primary here
   risks: Risk[];
   setRisks: React.Dispatch<React.SetStateAction<Risk[]>>;
   effortMultiplier: number;
@@ -28,8 +28,8 @@ interface ProjectSettingsSectionProps {
 }
 
 export default function ProjectSettingsSection({
-  requirementsDocument,
-  modules,
+  projectData,
+  modules, // modules is part of projectData, but kept if direct manipulation is needed
   risks,
   setRisks,
   effortMultiplier,
@@ -72,17 +72,19 @@ export default function ProjectSettingsSection({
     totalProjectCost = totalAdjustedTimeInMinutes.dividedBy(60).times(hourlyRateDecimal);
   }
 
-  const handleSaveProject = () => {
-    const projectData = {
-      projectName: "CodeCraft Project Export",
-      exportDate: new Date().toISOString(),
-      requirementsDocument,
-      modules,
-      risks,
-      projectSettings: {
-        effortMultiplier,
-        hourlyRate,
-      },
+  const handleExportProject = () => {
+    if (!projectData) {
+       toast({
+        title: "No Project Data",
+        description: "There is no current project data to export.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    // Enhance projectData with formatted summaries for export consistency
+    const exportableProjectData = {
+      ...projectData,
       projectSummary: {
         totalBaseTimeInMinutes: totalBaseTimeDecimal.toString(),
         totalBaseTimeFormatted: formatTime(totalBaseTimeDecimal),
@@ -90,11 +92,14 @@ export default function ProjectSettingsSection({
         totalAdjustedTimeFormatted: formatTime(totalAdjustedTimeInMinutes),
         totalProjectCost: totalProjectCost.toString(),
         totalProjectCostFormatted: `$${totalProjectCost.toFixed(2)}`
-      }
+      },
+      // Add modules and risks again if they are not already perfectly captured in projectData
+      // For this setup, projectData should already have them from page.tsx
     };
 
+
     try {
-      const jsonString = JSON.stringify(projectData, null, 2);
+      const jsonString = JSON.stringify(exportableProjectData, null, 2);
       const blob = new Blob([jsonString], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -106,14 +111,14 @@ export default function ProjectSettingsSection({
       URL.revokeObjectURL(url);
 
       toast({
-        title: "Project Saved",
+        title: "Project Exported",
         description: "Your project data has been downloaded as a JSON file.",
       });
     } catch (error) {
-      console.error("Error saving project:", error);
+      console.error("Error exporting project:", error);
       toast({
-        title: "Error Saving Project",
-        description: "Could not save the project data. Please try again.",
+        title: "Error Exporting Project",
+        description: "Could not export the project data. Please try again.",
         variant: "destructive",
       });
     }
@@ -133,7 +138,6 @@ export default function ProjectSettingsSection({
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          {/* Add Risk Form */}
           <div className="space-y-2 p-4 border border-border rounded-lg bg-secondary/30">
             <h3 className="font-headline text-lg">Add New Risk</h3>
             <Input 
@@ -165,7 +169,6 @@ export default function ProjectSettingsSection({
             </Button>
           </div>
 
-          {/* Risks List */}
           {risks.length > 0 && (
             <div className="space-y-2">
               <h3 className="font-headline text-lg">Identified Risks:</h3>
@@ -186,7 +189,6 @@ export default function ProjectSettingsSection({
           )}
           {risks.length === 0 && <p className="text-muted-foreground text-sm">No risks added yet.</p>}
           
-          {/* Effort Multiplier */}
           <div className="space-y-2 pt-4">
             <Label htmlFor="effort-multiplier" className="font-headline text-lg">Overall Effort Multiplier: {effortMultiplier.toFixed(1)}x</Label>
             <div className="flex items-center gap-2">
@@ -246,10 +248,10 @@ export default function ProjectSettingsSection({
             </p>
           </div>
           <div className="w-full pt-4 mt-4 border-t border-border">
-            <Button onClick={handleSaveProject} className="w-full bg-accent hover:bg-accent/90 text-accent-foreground">
-              <Save className="mr-2 h-5 w-5" /> Save Full Project (JSON)
+            <Button onClick={handleExportProject} className="w-full bg-accent hover:bg-accent/90 text-accent-foreground">
+              <Download className="mr-2 h-5 w-5" /> Export Current Project (JSON)
             </Button>
-            <p className="text-xs text-muted-foreground mt-2 text-center">This will download a JSON file containing all project data.</p>
+            <p className="text-xs text-muted-foreground mt-2 text-center">This will download a JSON file containing the current project data.</p>
           </div>
         </CardFooter>
       </Card>
