@@ -6,9 +6,10 @@ import Header from '@/components/Header';
 import RequirementsSection from '@/components/RequirementsSection';
 import ModulesSection from '@/components/ModulesSection';
 import ProjectSettingsSection from '@/components/ProjectSettingsSection';
+import AnalyticsSection from '@/components/AnalyticsSection'; // New Import
 import ProjectsDialog from '@/components/ProjectsDialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Lightbulb, LayoutGrid, Settings } from 'lucide-react';
+import { Lightbulb, LayoutGrid, Settings, AreaChart } from 'lucide-react'; // Added AreaChart icon
 import type { Module, Risk, Project, ProjectData, Task } from '@/types';
 import { Decimal } from 'decimal.js';
 import { useToast } from '@/hooks/use-toast';
@@ -98,11 +99,11 @@ export default function CodeCraftEstimatorPage() {
     if (savedRate) setHourlyRate(JSON.parse(savedRate));
   };
 
-  useEffect(() => { localStorage.setItem(REQ_DOC_KEY, JSON.stringify(requirementsDocument)); }, [requirementsDocument]);
-  useEffect(() => { localStorage.setItem(MODULES_KEY, JSON.stringify(modules)); }, [modules]);
-  useEffect(() => { localStorage.setItem(RISKS_KEY, JSON.stringify(risks)); }, [risks]);
-  useEffect(() => { localStorage.setItem(MULTIPLIER_KEY, JSON.stringify(effortMultiplier)); }, [effortMultiplier]);
-  useEffect(() => { localStorage.setItem(RATE_KEY, JSON.stringify(hourlyRate)); }, [hourlyRate]);
+  useEffect(() => { if (!currentProjectId) localStorage.setItem(REQ_DOC_KEY, JSON.stringify(requirementsDocument)); }, [requirementsDocument, currentProjectId]);
+  useEffect(() => { if (!currentProjectId) localStorage.setItem(MODULES_KEY, JSON.stringify(modules)); }, [modules, currentProjectId]);
+  useEffect(() => { if (!currentProjectId) localStorage.setItem(RISKS_KEY, JSON.stringify(risks)); }, [risks, currentProjectId]);
+  useEffect(() => { if (!currentProjectId) localStorage.setItem(MULTIPLIER_KEY, JSON.stringify(effortMultiplier)); }, [effortMultiplier, currentProjectId]);
+  useEffect(() => { if (!currentProjectId) localStorage.setItem(RATE_KEY, JSON.stringify(hourlyRate)); }, [hourlyRate, currentProjectId]);
 
 
   useEffect(() => {
@@ -244,7 +245,6 @@ export default function CodeCraftEstimatorPage() {
   
       const importedData = importedRaw as Partial<ProjectData & { name?: string, id?: string, createdAt?: string, updatedAt?: string }>;
   
-      // Ensure modules and tasks have IDs and correct numeric types
       const validatedModules: Module[] = (importedData.modules || []).map((m: any) => ({
         id: m.id || crypto.randomUUID(),
         name: m.name || "Untitled Module",
@@ -270,11 +270,11 @@ export default function CodeCraftEstimatorPage() {
       const newProject: Project = {
         id: crypto.randomUUID(), 
         name: importedData.name || `Imported Project - ${new Date().toLocaleDateString()}`,
-        requirementsDocument: importedData.requirementsDocument,
+        requirementsDocument: importedData.requirementsDocument as string,
         modules: validatedModules,
         risks: validatedRisks,
-        effortMultiplier: importedData.effortMultiplier,
-        hourlyRate: importedData.hourlyRate,
+        effortMultiplier: importedData.effortMultiplier as number,
+        hourlyRate: importedData.hourlyRate as number,
         totalBaseTimeInMinutes: String(importedData.totalBaseTimeInMinutes || '0'),
         totalAdjustedTimeInMinutes: String(importedData.totalAdjustedTimeInMinutes || '0'),
         totalProjectCost: String(importedData.totalProjectCost || '0'),
@@ -286,7 +286,7 @@ export default function CodeCraftEstimatorPage() {
       setSavedProjects(newSavedProjects);
       localStorage.setItem(SAVED_PROJECTS_KEY, JSON.stringify(newSavedProjects));
       toast({ title: "Project Imported", description: `Project "${newProject.name}" added. You can load it now.` });
-      setIsProjectsDialogOpen(true); // Keep dialog open
+      setIsProjectsDialogOpen(true);
     } catch (error) {
       console.error("Error importing project:", error);
       toast({ title: "Import Error", description: "Could not parse or import. Ensure it's valid JSON.", variant: "destructive" });
@@ -321,7 +321,7 @@ export default function CodeCraftEstimatorPage() {
       />
       <main className="flex-grow container mx-auto px-4 py-8">
         <Tabs defaultValue="requirements" className="w-full">
-          <TabsList className="grid w-full h-auto grid-cols-1 sm:grid-cols-3 mb-6 bg-card shadow-sm">
+          <TabsList className="grid w-full h-auto grid-cols-1 sm:grid-cols-4 mb-6 bg-card shadow-sm">
             <TabsTrigger value="requirements" className="py-3 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md">
               <Lightbulb className="mr-2 h-5 w-5" /> Requirements AI
             </TabsTrigger>
@@ -330,6 +330,9 @@ export default function CodeCraftEstimatorPage() {
             </TabsTrigger>
             <TabsTrigger value="settings" className="py-3 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md">
               <Settings className="mr-2 h-5 w-5" /> Settings & Cost
+            </TabsTrigger>
+            <TabsTrigger value="analytics" className="py-3 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md">
+              <AreaChart className="mr-2 h-5 w-5" /> Analytics
             </TabsTrigger>
           </TabsList>
           
@@ -354,6 +357,13 @@ export default function CodeCraftEstimatorPage() {
               hourlyRate={hourlyRate}
               setHourlyRate={setHourlyRate}
               totalBaseTimeInMinutes={totalBaseTimeInMinutes}
+            />
+          </TabsContent>
+           <TabsContent value="analytics">
+            <AnalyticsSection
+              modules={modules}
+              risks={risks}
+              effortMultiplier={effortMultiplier}
             />
           </TabsContent>
         </Tabs>
