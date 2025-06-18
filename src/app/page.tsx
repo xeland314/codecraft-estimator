@@ -22,6 +22,7 @@ const MODULES_KEY = 'modules';
 const RISKS_KEY = 'risks';
 const MULTIPLIER_KEY = 'effortMultiplier';
 const RATE_KEY = 'hourlyRate';
+const FIXED_COSTS_KEY = 'fixedCosts';
 
 
 export default function CodeCraftEstimatorPage() {
@@ -30,6 +31,7 @@ export default function CodeCraftEstimatorPage() {
   const [risks, setRisks] = useState<Risk[]>([]);
   const [effortMultiplier, setEffortMultiplier] = useState<number>(1.0);
   const [hourlyRate, setHourlyRate] = useState<number>(50);
+  const [fixedCosts, setFixedCosts] = useState<string>('0'); // Stored as string
   const [totalBaseTimeInMinutes, setTotalBaseTimeInMinutes] = useState<Decimal>(new Decimal(0));
   const [totalTasksTimeInMinutes, setTotalTasksTimeInMinutes] = useState<Decimal>(new Decimal(0));
 
@@ -44,9 +46,9 @@ export default function CodeCraftEstimatorPage() {
     return risksArray.map(risk => ({
       ...risk,
       id: risk.id || crypto.randomUUID(),
-      probability: risk.probability || 'Medium', // Default if missing
-      impactSeverity: risk.impactSeverity || 'Medium', // Default if missing
-      riskTimeInMinutes: typeof risk.riskTimeInMinutes === 'string' ? parseFloat(risk.riskTimeInMinutes) : risk.riskTimeInMinutes,
+      probability: risk.probability || 'Medium', 
+      impactSeverity: risk.impactSeverity || 'Medium', 
+      riskTimeInMinutes: typeof risk.riskTimeInMinutes === 'string' ? parseFloat(risk.riskTimeInMinutes) : (risk.riskTimeInMinutes || 0),
     }));
   };
 
@@ -57,6 +59,7 @@ export default function CodeCraftEstimatorPage() {
       const upgradedProjects = parsedProjects.map(p => ({
         ...p,
         risks: validateAndUpgradeRisks(p.risks || []),
+        fixedCosts: p.fixedCosts || '0',
       }));
       setSavedProjects(upgradedProjects);
     }
@@ -99,7 +102,7 @@ export default function CodeCraftEstimatorPage() {
     
     const savedRisksData = localStorage.getItem(RISKS_KEY);
      if (savedRisksData) {
-        const parsedRisks = JSON.parse(savedRisksData) as any[]; // Load as any first
+        const parsedRisks = JSON.parse(savedRisksData) as any[]; 
         setRisks(validateAndUpgradeRisks(parsedRisks));
     }
 
@@ -108,6 +111,9 @@ export default function CodeCraftEstimatorPage() {
 
     const savedRate = localStorage.getItem(RATE_KEY);
     if (savedRate) setHourlyRate(JSON.parse(savedRate));
+
+    const savedFixedCosts = localStorage.getItem(FIXED_COSTS_KEY);
+    if (savedFixedCosts) setFixedCosts(JSON.parse(savedFixedCosts));
   };
 
   useEffect(() => { if (!currentProjectId) localStorage.setItem(REQ_DOC_KEY, JSON.stringify(requirementsDocument)); }, [requirementsDocument, currentProjectId]);
@@ -115,6 +121,7 @@ export default function CodeCraftEstimatorPage() {
   useEffect(() => { if (!currentProjectId) localStorage.setItem(RISKS_KEY, JSON.stringify(risks)); }, [risks, currentProjectId]);
   useEffect(() => { if (!currentProjectId) localStorage.setItem(MULTIPLIER_KEY, JSON.stringify(effortMultiplier)); }, [effortMultiplier, currentProjectId]);
   useEffect(() => { if (!currentProjectId) localStorage.setItem(RATE_KEY, JSON.stringify(hourlyRate)); }, [hourlyRate, currentProjectId]);
+  useEffect(() => { if (!currentProjectId) localStorage.setItem(FIXED_COSTS_KEY, JSON.stringify(fixedCosts)); }, [fixedCosts, currentProjectId]);
 
 
   useEffect(() => {
@@ -141,23 +148,27 @@ export default function CodeCraftEstimatorPage() {
     setRisks(validateAndUpgradeRisks(projectData.risks));
     setEffortMultiplier(projectData.effortMultiplier);
     setHourlyRate(projectData.hourlyRate);
+    setFixedCosts(projectData.fixedCosts || '0');
   };
 
   const handleSaveCurrentProject = useCallback((name: string) => {
     const now = new Date().toISOString();
     
     const totalAdjustedTime = totalBaseTimeInMinutes.times(new Decimal(effortMultiplier));
-    const cost = hourlyRate > 0 ? totalAdjustedTime.dividedBy(60).times(new Decimal(hourlyRate)) : new Decimal(0);
+    const costFromTime = hourlyRate > 0 ? totalAdjustedTime.dividedBy(60).times(new Decimal(hourlyRate)) : new Decimal(0);
+    const totalCost = costFromTime.plus(new Decimal(fixedCosts));
+
 
     const projectDataToSave: ProjectData = {
       requirementsDocument,
       modules,
-      risks: validateAndUpgradeRisks(risks), // Ensure risks are in the latest format
+      risks: validateAndUpgradeRisks(risks), 
       effortMultiplier,
       hourlyRate,
+      fixedCosts,
       totalBaseTimeInMinutes: totalBaseTimeInMinutes.toString(),
       totalAdjustedTimeInMinutes: totalAdjustedTime.toString(),
-      totalProjectCost: cost.toString(),
+      totalProjectCost: totalCost.toString(),
     };
 
     let newSavedProjects: Project[];
@@ -190,7 +201,7 @@ export default function CodeCraftEstimatorPage() {
     setCurrentProjectName(newCurrentProjectName);
     localStorage.setItem(CURRENT_PROJECT_ID_KEY, newCurrentProjectId as string);
     setIsProjectsDialogOpen(false);
-  }, [requirementsDocument, modules, risks, effortMultiplier, hourlyRate, totalBaseTimeInMinutes, savedProjects, currentProjectId, toast]);
+  }, [requirementsDocument, modules, risks, effortMultiplier, hourlyRate, fixedCosts, totalBaseTimeInMinutes, savedProjects, currentProjectId, toast]);
 
   const handleLoadProject = useCallback((projectId: string) => {
     const projectToLoad = savedProjects.find(p => p.id === projectId);
@@ -212,6 +223,7 @@ export default function CodeCraftEstimatorPage() {
     setRisks([]);
     setEffortMultiplier(1.0);
     setHourlyRate(50);
+    setFixedCosts('0');
     setCurrentProjectId(null);
     setCurrentProjectName(null);
     localStorage.removeItem(CURRENT_PROJECT_ID_KEY);
@@ -221,6 +233,7 @@ export default function CodeCraftEstimatorPage() {
     localStorage.removeItem(RISKS_KEY);
     localStorage.removeItem(MULTIPLIER_KEY);
     localStorage.removeItem(RATE_KEY);
+    localStorage.removeItem(FIXED_COSTS_KEY);
 
     toast({ title: "New Project Started", description: "Workspace has been cleared." });
     setIsProjectsDialogOpen(false);
@@ -249,9 +262,9 @@ export default function CodeCraftEstimatorPage() {
         !Array.isArray(importedRaw.modules) ||
         !Array.isArray(importedRaw.risks) ||
         typeof importedRaw.effortMultiplier !== 'number' ||
-        typeof importedRaw.hourlyRate !== 'number'
+        typeof importedRaw.hourlyRate !== 'number' 
       ) {
-        toast({ title: "Invalid Project File", description: "The file is not a valid CodeCraft project.", variant: "destructive" });
+        toast({ title: "Invalid Project File", description: "The file is not a valid CodeCraft project. Required fields might be missing or of wrong type.", variant: "destructive" });
         return;
       }
   
@@ -271,9 +284,7 @@ export default function CodeCraftEstimatorPage() {
         } as Task)),
       }));
       
-      // Use the validation/upgrade function for risks
       const validatedRisks: Risk[] = validateAndUpgradeRisks(importedData.risks || []);
-
 
       const newProject: Project = {
         id: crypto.randomUUID(), 
@@ -283,6 +294,7 @@ export default function CodeCraftEstimatorPage() {
         risks: validatedRisks,
         effortMultiplier: importedData.effortMultiplier as number,
         hourlyRate: importedData.hourlyRate as number,
+        fixedCosts: String(importedData.fixedCosts || '0'),
         totalBaseTimeInMinutes: String(importedData.totalBaseTimeInMinutes || '0'),
         totalAdjustedTimeInMinutes: String(importedData.totalAdjustedTimeInMinutes || '0'),
         totalProjectCost: String(importedData.totalProjectCost || '0'),
@@ -297,26 +309,28 @@ export default function CodeCraftEstimatorPage() {
       setIsProjectsDialogOpen(true);
     } catch (error) {
       console.error("Error importing project:", error);
-      toast({ title: "Import Error", description: "Could not parse or import. Ensure it's valid JSON.", variant: "destructive" });
+      toast({ title: "Import Error", description: "Could not parse or import. Ensure it's valid JSON and has all required fields.", variant: "destructive" });
     }
   }, [savedProjects, toast]);
   
   const getCurrentProjectDataForDialog = (): ProjectData | null => {
-    if (!currentProjectId && !requirementsDocument && modules.length === 0 && risks.length === 0) {
+    if (!currentProjectId && !requirementsDocument && modules.length === 0 && risks.length === 0 && fixedCosts === '0') {
         return null;
     }
     const totalAdjustedTime = totalBaseTimeInMinutes.times(new Decimal(effortMultiplier));
-    const cost = hourlyRate > 0 ? totalAdjustedTime.dividedBy(60).times(new Decimal(hourlyRate)) : new Decimal(0);
+    const costFromTime = hourlyRate > 0 ? totalAdjustedTime.dividedBy(60).times(new Decimal(hourlyRate)) : new Decimal(0);
+    const totalCost = costFromTime.plus(new Decimal(fixedCosts));
 
     return {
         requirementsDocument,
         modules,
-        risks: validateAndUpgradeRisks(risks), // Ensure risks are current
+        risks: validateAndUpgradeRisks(risks),
         effortMultiplier,
         hourlyRate,
+        fixedCosts,
         totalBaseTimeInMinutes: totalBaseTimeInMinutes.toString(),
         totalAdjustedTimeInMinutes: totalAdjustedTime.toString(),
-        totalProjectCost: cost.toString(),
+        totalProjectCost: totalCost.toString(),
     };
   };
 
@@ -356,7 +370,8 @@ export default function CodeCraftEstimatorPage() {
           </TabsContent>
           <TabsContent value="settings">
             <ProjectSettingsSection
-              projectData={getCurrentProjectDataForDialog()} 
+              projectData={getCurrentProjectDataForDialog()}
+              requirementsDocument={requirementsDocument} 
               modules={modules} 
               risks={risks} 
               setRisks={setRisks} 
@@ -364,6 +379,8 @@ export default function CodeCraftEstimatorPage() {
               setEffortMultiplier={setEffortMultiplier}
               hourlyRate={hourlyRate}
               setHourlyRate={setHourlyRate}
+              fixedCosts={fixedCosts}
+              setFixedCosts={setFixedCosts}
               totalBaseTimeInMinutes={totalBaseTimeInMinutes}
               totalTasksTimeInMinutes={totalTasksTimeInMinutes}
             />

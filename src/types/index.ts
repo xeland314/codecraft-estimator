@@ -46,6 +46,7 @@ export interface ProjectData {
   risks: Risk[];
   effortMultiplier: number;
   hourlyRate: number;
+  fixedCosts: string; // Stored as string from Decimal
   // Summary fields can be stored to avoid recalculation on load, or recalculated.
   // Storing them makes loading faster and preserves the exact state at save time.
   totalBaseTimeInMinutes: string; // Stored as string from Decimal
@@ -59,4 +60,13 @@ export interface Project extends ProjectData {
   name: string;
   createdAt: string; // ISO date string
   updatedAt: string; // ISO date string
+}
+
+// AI Flow Types
+export interface SuggestRisksInput {
+  projectDescription: string;
+}
+
+export interface SuggestRisksOutput {
+  suggestedRisks: string[];
 }
