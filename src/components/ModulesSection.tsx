@@ -3,14 +3,15 @@
 
 import type * as React from 'react';
 import { useState, useEffect } from 'react';
-import type { Module, Task, TimeUnit } from '@/types';
+import type { Module, Task, TimeUnit, TaskCategory } from '@/types';
+import { TASK_CATEGORIES } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { PackagePlus, ListChecks, Trash2, PlusCircle, Brain, Loader2, Edit3, Save } from 'lucide-react';
+import { PackagePlus, ListChecks, Trash2, PlusCircle, Brain, Loader2, Edit3, Save, Layers } from 'lucide-react';
 import { calculateWeightedAverage, convertToMinutes, formatTime } from '@/lib/timeUtils';
 import { augmentTasks, type AugmentTasksOutput } from '@/ai/flows/augment-tasks';
 import { useToast } from '@/hooks/use-toast';
@@ -68,27 +69,27 @@ export default function ModulesSection({ modules, setModules }: ModulesSectionPr
     setModules(prev => prev.filter(m => m.id !== moduleId));
   };
 
-  const handleTaskInputChange = (moduleId: string, field: keyof Task, value: string | number, unitField?: boolean) => {
+  const handleTaskInputChange = (moduleId: string, field: keyof Task, value: string | number, unitFieldOrCategory?: boolean) => {
     setNewTask(prev => ({
       ...prev,
       [moduleId]: {
         ...prev[moduleId],
-        [field]: unitField ? value : (value === '' ? undefined : Number(value))
+        [field]: unitFieldOrCategory ? value : (value === '' ? undefined : Number(value))
       }
     }));
   };
   
-  const handleEditingTaskInputChange = (field: keyof Task, value: string | number, unitField?: boolean) => {
+  const handleEditingTaskInputChange = (field: keyof Task, value: string | number, unitFieldOrCategory?: boolean) => {
     setEditingTaskData(prev => ({
       ...prev,
-      [field]: unitField ? value : (value === '' ? undefined : Number(value))
+      [field]: unitFieldOrCategory ? value : (value === '' ? undefined : Number(value))
     }));
   };
 
   const handleAddTask = (moduleId: string) => {
     const currentNewTask = newTask[moduleId];
     if (!currentNewTask || !currentNewTask.description?.trim() || currentNewTask.optimisticTime == null || currentNewTask.mostLikelyTime == null || currentNewTask.pessimisticTime == null || !currentNewTask.timeUnit) {
-      toast({ title: "Incomplete task details", description: "Please fill all task fields.", variant: "destructive" });
+      toast({ title: "Incomplete task details", description: "Please fill all task fields (description, times, unit).", variant: "destructive" });
       return;
     }
 
@@ -111,17 +112,18 @@ export default function ModulesSection({ modules, setModules }: ModulesSectionPr
       mostLikelyTime: currentNewTask.mostLikelyTime,
       pessimisticTime: currentNewTask.pessimisticTime,
       timeUnit: currentNewTask.timeUnit,
+      category: currentNewTask.category || undefined,
       weightedAverageTimeInMinutes,
     };
 
     setModules(prev => prev.map(m => m.id === moduleId ? { ...m, tasks: [...m.tasks, taskToAdd] } : m));
-    setNewTask(prev => ({ ...prev, [moduleId]: {} }));
+    setNewTask(prev => ({ ...prev, [moduleId]: { category: prev[moduleId]?.category } })); // Preserve category if user set it, clear others
   };
 
   const handleUpdateTask = (moduleId: string) => {
     if (!editingTaskId || !editingTaskData) return;
     
-    const { description, optimisticTime, mostLikelyTime, pessimisticTime, timeUnit } = editingTaskData;
+    const { description, optimisticTime, mostLikelyTime, pessimisticTime, timeUnit, category } = editingTaskData;
 
     if (!description?.trim() || optimisticTime == null || mostLikelyTime == null || pessimisticTime == null || !timeUnit) {
       toast({ title: "Incomplete task details", description: "Please fill all task fields for editing.", variant: "destructive" });
@@ -133,7 +135,16 @@ export default function ModulesSection({ modules, setModules }: ModulesSectionPr
     }
 
     const weightedAverageTimeInMinutes = calculateWeightedAverage(optimisticTime, mostLikelyTime, pessimisticTime, timeUnit);
-    const updatedTask: Task = { id: editingTaskId, description, optimisticTime, pessimisticTime, mostLikelyTime, timeUnit, weightedAverageTimeInMinutes };
+    const updatedTask: Task = { 
+        id: editingTaskId, 
+        description, 
+        optimisticTime, 
+        pessimisticTime, 
+        mostLikelyTime, 
+        timeUnit, 
+        category: category || undefined, 
+        weightedAverageTimeInMinutes 
+    };
 
     setModules(prev => prev.map(m => 
       m.id === moduleId 
@@ -170,7 +181,7 @@ export default function ModulesSection({ modules, setModules }: ModulesSectionPr
       `${t.description} | ${t.optimisticTime} | ${t.mostLikelyTime} | ${t.pessimisticTime} | ${t.timeUnit}`
     ).join('\n');
     
-    const augmentationPrompt = `${currentAiTaskPrompt}. Ensure each new task is on a new line and follows this format: 'TASK_DESCRIPTION | OPTIMISTIC_TIME | MOST_LIKELY_TIME | PESSIMISTIC_TIME | TIME_UNIT (minutes/hours/days)'. Adjust existing task times if necessary based on your reasoning by re-listing them in the same format.`;
+    const augmentationPrompt = `${currentAiTaskPrompt}. Ensure each new task is on a new line and follows this format: 'TASK_DESCRIPTION | OPTIMISTIC_TIME | MOST_LIKELY_TIME | PESSIMISTIC_TIME | TIME_UNIT (minutes/hours/days)'. Adjust existing task times if necessary based on your reasoning by re-listing them in the same format. Do not assign categories.`;
 
     try {
       const result: AugmentTasksOutput = await augmentTasks({
@@ -194,12 +205,13 @@ export default function ModulesSection({ modules, setModules }: ModulesSectionPr
             mostLikelyTime: data.mostLikelyTime!,
             pessimisticTime: data.pessimisticTime!,
             timeUnit: data.timeUnit!,
+            // Categories are not assigned by AI for now
             weightedAverageTimeInMinutes,
           };
         });
 
         setModules(prev => prev.map(m => m.id === moduleId ? { ...m, tasks: [...newTasks] } : m)); // Replaces tasks with AI output
-        toast({ title: "Tasks Augmented", description: "Tasks have been updated by AI. Review the changes." });
+        toast({ title: "Tasks Augmented", description: "Tasks have been updated by AI. Review the changes and assign categories manually if needed." });
         setAiTaskPrompt(prev => ({...prev, [moduleId]: ''}));
       } else {
         toast({ title: "No Tasks Generated", description: "AI did not suggest new tasks or adjustments." });
@@ -222,7 +234,7 @@ export default function ModulesSection({ modules, setModules }: ModulesSectionPr
           Module & Task Management
         </CardTitle>
         <CardDescription>
-          Organize your project into modules and define tasks with time estimates.
+          Organize your project into modules and define tasks with time estimates and categories.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -250,11 +262,9 @@ export default function ModulesSection({ modules, setModules }: ModulesSectionPr
               <AccordionTrigger className="px-4 py-3 hover:bg-secondary/50 rounded-t-lg">
                 <div className="flex justify-between items-center w-full">
                   <span className="font-headline text-lg text-primary">{module.name}</span>
-                  <Button asChild variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); handleDeleteModule(module.id); }} className="text-destructive hover:bg-destructive/10">
-                    <div>
-                      <Trash2 className="h-4 w-4" />
-                    </div>
-                  </Button>
+                    <Button asChild variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); handleDeleteModule(module.id); }} className="text-destructive hover:bg-destructive/10">
+                        <div><Trash2 className="h-4 w-4" /></div>
+                    </Button>
                 </div>
               </AccordionTrigger>
               <AccordionContent className="px-4 py-3 border-t border-border space-y-4">
@@ -263,17 +273,16 @@ export default function ModulesSection({ modules, setModules }: ModulesSectionPr
                   <CardHeader>
                     <CardTitle className="text-md font-headline flex items-center"><ListChecks className="mr-2 h-5 w-5 text-primary/80"/>Add New Task</CardTitle>
                   </CardHeader>
-                  <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 items-end">
+                  <CardContent className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-7 gap-3 items-end">
                     <Textarea 
                       placeholder="Task description" 
                       value={newTask[module.id]?.description || ''} 
                       onChange={(e) => handleTaskInputChange(module.id, 'description', e.target.value, true)} 
-                      className="md:col-span-2 lg:col-span-2 min-h-[40px] focus:ring-accent"
+                      className="md:col-span-3 lg:col-span-2 min-h-[40px] focus:ring-accent"
                     />
                     <Input type="number" placeholder="Optimistic" value={newTask[module.id]?.optimisticTime || ''} onChange={(e) => handleTaskInputChange(module.id, 'optimisticTime', e.target.value)} className="focus:ring-accent" min="0"/>
                     <Input type="number" placeholder="Most Likely" value={newTask[module.id]?.mostLikelyTime || ''} onChange={(e) => handleTaskInputChange(module.id, 'mostLikelyTime', e.target.value)} className="focus:ring-accent" min="0"/>
                     <Input type="number" placeholder="Pessimistic" value={newTask[module.id]?.pessimisticTime || ''} onChange={(e) => handleTaskInputChange(module.id, 'pessimisticTime', e.target.value)} className="focus:ring-accent" min="0"/>
-                    <div className="flex flex-col space-y-1">
                     <Select onValueChange={(val) => handleTaskInputChange(module.id, 'timeUnit', val, true)} value={newTask[module.id]?.timeUnit || ''}>
                       <SelectTrigger className="focus:ring-accent"><SelectValue placeholder="Unit" /></SelectTrigger>
                       <SelectContent>
@@ -282,9 +291,16 @@ export default function ModulesSection({ modules, setModules }: ModulesSectionPr
                         <SelectItem value="days">Days</SelectItem>
                       </SelectContent>
                     </Select>
-                    <Button onClick={() => handleAddTask(module.id)} size="sm" className="w-full bg-accent hover:bg-accent/90 text-accent-foreground">
-                      <PlusCircle className="mr-1 h-4 w-4" /> Add Task
-                    </Button>
+                    <div className="flex flex-col space-y-1">
+                      <Select onValueChange={(val) => handleTaskInputChange(module.id, 'category', val, true)} value={newTask[module.id]?.category || ''}>
+                        <SelectTrigger className="focus:ring-accent"><SelectValue placeholder="Category" /></SelectTrigger>
+                        <SelectContent>
+                          {TASK_CATEGORIES.map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                      <Button onClick={() => handleAddTask(module.id)} size="sm" className="w-full bg-accent hover:bg-accent/90 text-accent-foreground">
+                        <PlusCircle className="mr-1 h-4 w-4" /> Add Task
+                      </Button>
                     </div>
                   </CardContent>
                 </Card>
@@ -296,8 +312,8 @@ export default function ModulesSection({ modules, setModules }: ModulesSectionPr
                       <li key={task.id} className="p-3 border border-border rounded-md bg-background shadow-sm flex flex-col space-y-2">
                         {editingTaskId === task.id ? (
                           // Editing view
-                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-7 gap-2 items-center">
-                            <Textarea value={editingTaskData?.description || ''} onChange={(e) => handleEditingTaskInputChange('description', e.target.value, true)} className="md:col-span-2 lg:col-span-2 min-h-[40px] focus:ring-accent"/>
+                          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-8 gap-2 items-center">
+                            <Textarea value={editingTaskData?.description || ''} onChange={(e) => handleEditingTaskInputChange('description', e.target.value, true)} className="md:col-span-3 lg:col-span-2 min-h-[40px] focus:ring-accent"/>
                             <Input type="number" value={editingTaskData?.optimisticTime || ''} onChange={(e) => handleEditingTaskInputChange('optimisticTime', e.target.value)} className="focus:ring-accent" min="0"/>
                             <Input type="number" value={editingTaskData?.mostLikelyTime || ''} onChange={(e) => handleEditingTaskInputChange('mostLikelyTime', e.target.value)} className="focus:ring-accent" min="0"/>
                             <Input type="number" value={editingTaskData?.pessimisticTime || ''} onChange={(e) => handleEditingTaskInputChange('pessimisticTime', e.target.value)} className="focus:ring-accent" min="0"/>
@@ -309,9 +325,15 @@ export default function ModulesSection({ modules, setModules }: ModulesSectionPr
                                 <SelectItem value="days">Days</SelectItem>
                               </SelectContent>
                             </Select>
+                             <Select onValueChange={(val) => handleEditingTaskInputChange('category', val, true)} value={editingTaskData?.category || ''}>
+                              <SelectTrigger className="focus:ring-accent"><SelectValue placeholder="Category" /></SelectTrigger>
+                              <SelectContent>
+                                {TASK_CATEGORIES.map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}
+                              </SelectContent>
+                            </Select>
                             <div className="flex gap-1">
                               <Button onClick={() => handleUpdateTask(module.id)} size="icon" variant="ghost" className="text-green-600 hover:bg-green-600/10"><Save className="h-4 w-4"/></Button>
-                              <Button onClick={() => { setEditingTaskId(null); setEditingTaskData(null); }} size="icon" variant="ghost" className="text-muted-foreground hover:bg-muted-foreground/10"><Trash2 className="h-4 w-4"/> Cancel</Button>
+                              <Button onClick={() => { setEditingTaskId(null); setEditingTaskData(null); }} size="icon" variant="ghost" className="text-muted-foreground hover:bg-muted-foreground/10"><Trash2 className="h-4 w-4"/> Cancel</Button> {/* Adjusted icon and text */}
                             </div>
                           </div>
                         ) : (
@@ -321,6 +343,7 @@ export default function ModulesSection({ modules, setModules }: ModulesSectionPr
                               <p className="font-medium text-foreground">{task.description}</p>
                               <p className="text-xs text-muted-foreground">
                                 Opt: {task.optimisticTime} {task.timeUnit}, ML: {task.mostLikelyTime} {task.timeUnit}, Pess: {task.pessimisticTime} {task.timeUnit}
+                                {task.category && ` | Cat: ${task.category}`}
                               </p>
                             </div>
                             <div className="text-right">
@@ -343,7 +366,7 @@ export default function ModulesSection({ modules, setModules }: ModulesSectionPr
                 <Card className="mt-4 bg-secondary/30">
                   <CardHeader>
                     <CardTitle className="text-md font-headline flex items-center"><Brain className="mr-2 h-5 w-5 text-primary/80"/>AI Task Augmentation</CardTitle>
-                    <CardDescription className="text-xs">Let AI suggest additional tasks or refine estimates for this module. AI will replace existing tasks with its suggestions.</CardDescription>
+                    <CardDescription className="text-xs">Let AI suggest additional tasks or refine estimates for this module. AI will replace existing tasks with its suggestions. Categories will need to be assigned manually after augmentation.</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-2">
                     <Textarea 

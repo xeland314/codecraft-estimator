@@ -2,8 +2,9 @@
 "use client";
 
 import type * as React from 'react';
-import { useState, useRef } from 'react';
-import type { Module, Risk, TimeUnit, ProjectData, RiskLevel } from '@/types';
+import { useState, useRef, useMemo } from 'react';
+import type { Module, Risk, TimeUnit, ProjectData, RiskLevel, TaskCategory } from '@/types';
+import { TASK_CATEGORIES } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -11,7 +12,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Slider } from "@/components/ui/slider"
-import { ShieldAlert, CircleDollarSign, PlusCircle, Trash2, TrendingUp, Download, Brain, Loader2, ListChecks } from 'lucide-react';
+import { ShieldAlert, CircleDollarSign, PlusCircle, Trash2, TrendingUp, Download, Brain, Loader2, ListChecks, Layers } from 'lucide-react';
 import { convertToMinutes, formatTime } from '@/lib/timeUtils';
 import { useToast } from '@/hooks/use-toast';
 import { Decimal } from 'decimal.js';
@@ -128,6 +129,19 @@ export default function ProjectSettingsSection({
   }
   const totalProjectCost = costFromTime.plus(fixedCostsDecimal);
 
+  const timeByCategory = useMemo(() => {
+    const categoryMap: { [key: string]: Decimal } = {};
+    modules.forEach(module => {
+      module.tasks.forEach(task => {
+        const category = task.category || "Uncategorized";
+        categoryMap[category] = (categoryMap[category] || new Decimal(0)).plus(task.weightedAverageTimeInMinutes);
+      });
+    });
+    return Object.entries(categoryMap)
+                 .map(([name, time]) => ({ name, time }))
+                 .sort((a, b) => TASK_CATEGORIES.indexOf(a.name as TaskCategory) - TASK_CATEGORIES.indexOf(b.name as TaskCategory)); // Sort by predefined order
+  }, [modules]);
+
 
   const handleExportProject = () => {
     if (!projectData) {
@@ -151,6 +165,7 @@ export default function ProjectSettingsSection({
         totalProjectCostFormatted: `$${totalProjectCost.toFixed(2)}`,
         fixedCosts: fixedCostsDecimal.toString(),
         fixedCostsFormatted: `$${fixedCostsDecimal.toFixed(2)}`,
+        timeByCategory: timeByCategory.map(cat => ({ name: cat.name, time: cat.time.toString(), formattedTime: formatTime(cat.time) }))
       },
     };
 
@@ -383,6 +398,24 @@ export default function ProjectSettingsSection({
               ${totalProjectCost.toFixed(2)}
             </p>
           </div>
+          
+          {timeByCategory.length > 0 && (
+            <div className="w-full pt-3 mt-3 border-t border-border">
+              <h4 className="font-headline text-lg flex items-center mb-2">
+                <Layers className="mr-2 h-5 w-5 text-primary" />
+                Time Breakdown by Category:
+              </h4>
+              <ul className="space-y-1 text-sm">
+                {timeByCategory.map(cat => (
+                  <li key={cat.name} className="flex justify-between">
+                    <span className="text-muted-foreground">{cat.name}:</span>
+                    <span className="font-medium text-foreground">{formatTime(cat.time)}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           <div className="w-full pt-4 mt-4 border-t border-border">
             <Button onClick={handleExportProject} className="w-full bg-accent hover:bg-accent/90 text-accent-foreground" disabled={!projectData}>
               <Download className="mr-2 h-5 w-5" /> Export Current Project (JSON)

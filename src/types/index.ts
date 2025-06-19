@@ -1,5 +1,23 @@
 export type TimeUnit = 'minutes' | 'hours' | 'days';
 
+export const TASK_CATEGORIES = [
+  "Design",
+  "Development (Frontend)",
+  "Development (Backend)",
+  "API Development",
+  "Database",
+  "Testing/QA",
+  "Deployment",
+  "Management",
+  "Documentation",
+  "Research",
+  "Communication",
+  "Other",
+] as const;
+
+export type TaskCategory = typeof TASK_CATEGORIES[number];
+
+
 export interface Task {
   id: string;
   description: string;
@@ -8,6 +26,7 @@ export interface Task {
   mostLikelyTime: number;
   timeUnit: TimeUnit;
   weightedAverageTimeInMinutes: number;
+  category?: TaskCategory;
 }
 
 export interface Module {

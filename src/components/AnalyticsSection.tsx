@@ -3,14 +3,14 @@
 
 import type * as React from 'react';
 import { useMemo } from 'react';
-import type { Module, Risk, Task, RiskLevel } from '@/types';
-import { riskLevelToNumber } from '@/types';
+import type { Module, Risk, Task, RiskLevel, TaskCategory } from '@/types';
+import { riskLevelToNumber, TASK_CATEGORIES } from '@/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { BarChart, CartesianGrid, XAxis, YAxis, ZAxis, Bar, Tooltip, Legend, ResponsiveContainer, LegendProps, TooltipProps, ScatterChart, Scatter } from 'recharts';
+import { BarChart, CartesianGrid, XAxis, YAxis, ZAxis, Bar, Tooltip, Legend, ResponsiveContainer, LegendProps, TooltipProps, ScatterChart, Scatter, PieChart, Pie, Cell } from 'recharts';
 import { ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from "@/components/ui/chart"
 import { Decimal } from 'decimal.js';
 import { convertToMinutes, formatTime } from '@/lib/timeUtils';
-import { AreaChart, BarChartHorizontalBig, PieChartIcon, AlertTriangleIcon } from 'lucide-react';
+import { AreaChart, BarChartHorizontalBig, PieChartIcon, AlertTriangleIcon, Layers } from 'lucide-react';
 
 interface AnalyticsSectionProps {
   modules: Module[];
@@ -34,6 +34,20 @@ const CustomTooltipContent = ({ active, payload, label, contentStyle, itemStyle,
         );
     }
 
+    // Specific for Pie Chart (Category Distribution)
+    if (payload[0].payload?.name && payload[0].payload?.value !== undefined && payload[0].payload?.percent !== undefined) {
+        const categoryData = payload[0].payload;
+        const formattedTime = formatTime(new Decimal(categoryData.value));
+        const percentage = (categoryData.percent * 100).toFixed(1);
+        return (
+            <div className="p-2 bg-background border border-border rounded shadow-lg text-sm" style={contentStyle}>
+                <p className="font-semibold" style={labelStyle}>{categoryData.name}</p>
+                <p style={{ color: payload[0].payload.fill, ...itemStyle }}>Time: {formattedTime} ({percentage}%)</p>
+            </div>
+        );
+    }
+
+
     // Default for Bar Charts
     const data = payload[0];
     const formattedTime = formatTime(new Decimal(data.value || 0));
@@ -52,7 +66,7 @@ const CustomTooltipContent = ({ active, payload, label, contentStyle, itemStyle,
 const CustomLegendContent = (props: LegendProps) => {
   const { payload } = props;
   return (
-    <ul className="flex justify-center flex-wrap space-x-4 text-sm mt-2">
+    <ul className="flex justify-center flex-wrap gap-x-4 gap-y-1 text-sm mt-2">
       {payload?.map((entry, index) => (
         <li key={`item-${index}`} style={{ color: entry.color }} className="flex items-center">
           <span style={{ backgroundColor: entry.color, width: '10px', height: '10px', marginRight: '5px', display: 'inline-block', borderRadius: entry.type === 'circle' ? '50%' : '0' }}></span>
@@ -161,6 +175,29 @@ export default function AnalyticsSection({ modules, risks, effortMultiplier }: A
     risks: { label: "Risks", color: "hsl(var(--chart-1))" }, // Generic, actual color per bubble
   } satisfies ChartConfig;
 
+  const categoryTimeData = useMemo(() => {
+    const categoryMap: { [key: string]: Decimal } = {};
+    modules.forEach(module => {
+      module.tasks.forEach(task => {
+        const category = task.category || "Uncategorized";
+        categoryMap[category] = (categoryMap[category] || new Decimal(0)).plus(task.weightedAverageTimeInMinutes);
+      });
+    });
+    const chartColors = ["hsl(var(--chart-1))", "hsl(var(--chart-2))", "hsl(var(--chart-3))", "hsl(var(--chart-4))", "hsl(var(--chart-5))", "hsl(var(--muted))"];
+    return Object.entries(categoryMap)
+      .map(([name, value], index) => ({ name, value: value.toNumber(), fill: chartColors[index % chartColors.length] }))
+      .filter(item => item.value > 0)
+      .sort((a,b) => b.value - a.value); // Sort for better pie chart display
+  }, [modules]);
+
+  const categoryTimeConfig = useMemo(() => {
+    const config: ChartConfig = {};
+    categoryTimeData.forEach(item => {
+        config[item.name] = { label: item.name, color: item.fill}
+    });
+    return config;
+  }, [categoryTimeData]);
+
 
   if (modules.length === 0 && risks.length === 0) {
     return (
@@ -250,6 +287,50 @@ export default function AnalyticsSection({ modules, risks, effortMultiplier }: A
                         ))}
                         <ChartLegend content={<CustomLegendContent />} wrapperStyle={{paddingTop: '20px'}} />
                     </BarChart>
+                </ChartContainer>
+              </CardContent>
+            </Card>
+          )}
+
+          {categoryTimeData.length > 0 && (
+             <Card className="shadow-lg">
+              <CardHeader>
+                <CardTitle className="font-headline text-xl flex items-center">
+                  <Layers className="mr-2 h-5 w-5 text-primary" />
+                  Time Distribution by Task Category
+                </CardTitle>
+                <CardDescription>Breakdown of total realistic task time by assigned category.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ChartContainer config={categoryTimeConfig} className="min-h-[300px] w-full aspect-square sm:aspect-video">
+                  <PieChart>
+                    <ChartTooltip content={<CustomTooltipContent />} />
+                    <Pie 
+                        data={categoryTimeData} 
+                        dataKey="value" 
+                        nameKey="name" 
+                        cx="50%" 
+                        cy="50%" 
+                        outerRadius="80%" 
+                        labelLine={false}
+                        label={({ cx, cy, midAngle, innerRadius, outerRadius, percent, index, name }) => {
+                            const RADIAN = Math.PI / 180;
+                            const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
+                            const x = cx + radius * Math.cos(-midAngle * RADIAN);
+                            const y = cy + radius * Math.sin(-midAngle * RADIAN);
+                            return (percent * 100) > 5 ? ( // Only show label if slice is > 5%
+                                <text x={x} y={y} fill="white" textAnchor={x > cx ? 'start' : 'end'} dominantBaseline="central" fontSize="12px">
+                                {`${name} (${(percent * 100).toFixed(0)}%)`}
+                                </text>
+                            ) : null;
+                        }}
+                    >
+                       {categoryTimeData.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.fill} />
+                        ))}
+                    </Pie>
+                    <ChartLegend content={<CustomLegendContent />} />
+                  </PieChart>
                 </ChartContainer>
               </CardContent>
             </Card>
