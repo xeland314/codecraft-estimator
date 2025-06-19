@@ -1,3 +1,5 @@
+import Decimal from "decimal.js";
+
 export type TimeUnit = 'minutes' | 'hours' | 'days';
 
 export const TASK_CATEGORIES = [
@@ -25,7 +27,7 @@ export interface Task {
   pessimisticTime: number;
   mostLikelyTime: number;
   timeUnit: TimeUnit;
-  weightedAverageTimeInMinutes: number;
+  weightedAverageTimeInMinutes: Decimal;
   category?: TaskCategory;
 }
 

@@ -57,7 +57,7 @@ export default function RequirementsSection({ requirementsDocument, setRequireme
             mostLikelyTime: mostLikelyTime,
             pessimisticTime: pessimisticTime,
             timeUnit: 'hours' as TimeUnit, // Explicitly set as AI provides in hours
-            weightedAverageTimeInMinutes: weightedAverageDecimal.toNumber(), // Store as number
+            weightedAverageTimeInMinutes: weightedAverageDecimal,
           };
         });
         return {

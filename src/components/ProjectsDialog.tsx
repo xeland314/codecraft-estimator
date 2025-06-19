@@ -229,6 +229,7 @@ export default function ProjectsDialog({
                 onChange={handleFileSelected}
                 accept=".json"
                 className="hidden"
+                title="Upload file"
               />
               <Button onClick={handleImportClick} variant="outline" className="w-full">
                 <Upload className="h-4 w-4 mr-2" /> Import Project (JSON)

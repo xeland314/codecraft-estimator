@@ -26,6 +26,7 @@ const FIXED_COSTS_KEY = 'fixedCosts';
 
 
 export default function CodeCraftEstimatorPage() {
+  const [name, setName] = useState<string>('');
   const [requirementsDocument, setRequirementsDocument] = useState<string>('');
   const [modules, setModules] = useState<Module[]>([]);
   const [risks, setRisks] = useState<Risk[]>([]);
@@ -93,7 +94,7 @@ export default function CodeCraftEstimatorPage() {
         parsedModules.forEach(module => {
             module.tasks.forEach(task => {
                 if (typeof task.weightedAverageTimeInMinutes !== 'number') {
-                    task.weightedAverageTimeInMinutes = parseFloat(String(task.weightedAverageTimeInMinutes));
+                    task.weightedAverageTimeInMinutes = new Decimal(parseFloat(String(task.weightedAverageTimeInMinutes)));
                 }
             });
         });
@@ -144,7 +145,7 @@ export default function CodeCraftEstimatorPage() {
 
   const loadProjectDataIntoState = (projectData: ProjectData) => {
     setRequirementsDocument(projectData.requirementsDocument);
-    setModules(projectData.modules.map(m => ({...m, tasks: m.tasks.map(t => ({...t, weightedAverageTimeInMinutes: Number(t.weightedAverageTimeInMinutes)}))})));
+    setModules(projectData.modules.map(m => ({...m, tasks: m.tasks.map(t => ({...t, weightedAverageTimeInMinutes: t.weightedAverageTimeInMinutes}))})));
     setRisks(validateAndUpgradeRisks(projectData.risks));
     setEffortMultiplier(projectData.effortMultiplier);
     setHourlyRate(projectData.hourlyRate);
@@ -160,6 +161,7 @@ export default function CodeCraftEstimatorPage() {
 
 
     const projectDataToSave: ProjectData = {
+      name,
       requirementsDocument,
       modules,
       risks: validateAndUpgradeRisks(risks), 
@@ -280,7 +282,7 @@ export default function CodeCraftEstimatorPage() {
           mostLikelyTime: Number(t.mostLikelyTime || 0),
           pessimisticTime: Number(t.pessimisticTime || 0),
           timeUnit: t.timeUnit || 'hours',
-          weightedAverageTimeInMinutes: Number(t.weightedAverageTimeInMinutes || 0),
+          weightedAverageTimeInMinutes: t.weightedAverageTimeInMinutes || 0,
         } as Task)),
       }));
       
@@ -322,6 +324,7 @@ export default function CodeCraftEstimatorPage() {
     const totalCost = costFromTime.plus(new Decimal(fixedCosts));
 
     return {
+        name,
         requirementsDocument,
         modules,
         risks: validateAndUpgradeRisks(risks),

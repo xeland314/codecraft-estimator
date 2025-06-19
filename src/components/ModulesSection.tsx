@@ -143,7 +143,7 @@ export default function ModulesSection({ modules, setModules }: ModulesSectionPr
         mostLikelyTime, 
         timeUnit, 
         category: category || undefined, 
-        weightedAverageTimeInMinutes 
+        weightedAverageTimeInMinutes
     };
 
     setModules(prev => prev.map(m => 
