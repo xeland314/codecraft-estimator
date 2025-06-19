@@ -53,7 +53,7 @@ const CustomTooltipContent = ({ active, payload, label, contentStyle, itemStyle,
     const formattedTime = formatTime(new Decimal(data.value || 0));
     return (
       <div className="p-2 bg-background border border-border rounded shadow-lg text-sm" style={contentStyle}>
-        <p className="font-semibold" style={labelStyle}>{`${label}`}</p>
+        <p className="font-semibold" style={labelStyle}>{`${label || ""}`}</p>
         <p style={{ color: data.payload.fill || data.color, ...itemStyle }}>{`${data.name}: ${formattedTime}`}</p>
         {payload[1] && <p style={{ color: payload[1].payload.fill || payload[1].color, ...itemStyle }}>{`${payload[1].name}: ${formatTime(new Decimal(payload[1].value || 0))}`}</p>}
         {payload[2] && <p style={{ color: payload[2].payload.fill || payload[2].color, ...itemStyle }}>{`${payload[2].name}: ${formatTime(new Decimal(payload[2].value || 0))}`}</p>}
