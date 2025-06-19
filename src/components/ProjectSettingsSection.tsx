@@ -175,11 +175,12 @@ export default function ProjectSettingsSection({
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       const projectNameForFile = projectData.name || "codecraft-project";
+      link.href = url; // Ensure the href is set to the blob URL
       link.download = `${projectNameForFile.toLowerCase().replace(/\s+/g, '-')}-export.json`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      URL.revokeObjectURL(url);
+      setTimeout(() => URL.revokeObjectURL(url), 100); // Delay revoking the URL to ensure the download starts
 
       toast({
         title: "Project Exported",
