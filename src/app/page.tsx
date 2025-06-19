@@ -26,7 +26,7 @@ const FIXED_COSTS_KEY = 'fixedCosts';
 
 
 export default function CodeCraftEstimatorPage() {
-  const [name, setName] = useState<string>('');
+  // const [name, setName] = useState<string>(''); // Removed unused name state
   const [requirementsDocument, setRequirementsDocument] = useState<string>('');
   const [modules, setModules] = useState<Module[]>([]);
   const [risks, setRisks] = useState<Risk[]>([]);
@@ -93,8 +93,10 @@ export default function CodeCraftEstimatorPage() {
         const parsedModules = JSON.parse(savedModules) as Module[];
         parsedModules.forEach(module => {
             module.tasks.forEach(task => {
-                if (typeof task.weightedAverageTimeInMinutes !== 'number') {
+                if (typeof task.weightedAverageTimeInMinutes !== 'number' && typeof task.weightedAverageTimeInMinutes !== 'object') {
                     task.weightedAverageTimeInMinutes = new Decimal(parseFloat(String(task.weightedAverageTimeInMinutes)));
+                } else if (typeof task.weightedAverageTimeInMinutes === 'number') {
+                   task.weightedAverageTimeInMinutes = new Decimal(task.weightedAverageTimeInMinutes);
                 }
             });
         });
@@ -145,7 +147,14 @@ export default function CodeCraftEstimatorPage() {
 
   const loadProjectDataIntoState = (projectData: ProjectData) => {
     setRequirementsDocument(projectData.requirementsDocument);
-    setModules(projectData.modules.map(m => ({...m, tasks: m.tasks.map(t => ({...t, weightedAverageTimeInMinutes: t.weightedAverageTimeInMinutes}))})));
+    // Ensure weightedAverageTimeInMinutes is Decimal
+    setModules(projectData.modules.map(m => ({
+      ...m, 
+      tasks: m.tasks.map(t => ({
+        ...t, 
+        weightedAverageTimeInMinutes: new Decimal(t.weightedAverageTimeInMinutes)
+      }))
+    })));
     setRisks(validateAndUpgradeRisks(projectData.risks));
     setEffortMultiplier(projectData.effortMultiplier);
     setHourlyRate(projectData.hourlyRate);
@@ -161,9 +170,12 @@ export default function CodeCraftEstimatorPage() {
 
 
     const projectDataToSave: ProjectData = {
-      name,
+      name, // The name comes from the dialog input via the 'name' parameter
       requirementsDocument,
-      modules,
+      modules: modules.map(m => ({ // Ensure Decimals are stringified for storage
+        ...m,
+        tasks: m.tasks.map(t => ({...t, weightedAverageTimeInMinutes: t.weightedAverageTimeInMinutes.toString()}))
+      })),
       risks: validateAndUpgradeRisks(risks), 
       effortMultiplier,
       hourlyRate,
@@ -175,12 +187,12 @@ export default function CodeCraftEstimatorPage() {
 
     let newSavedProjects: Project[];
     let newCurrentProjectId = currentProjectId;
-    let newCurrentProjectName = name;
+    let newCurrentProjectName = name; // This is the new name from the dialog
 
     if (currentProjectId) { 
       const projectIndex = savedProjects.findIndex(p => p.id === currentProjectId);
       if (projectIndex > -1) {
-        const updatedProject = { ...savedProjects[projectIndex], ...projectDataToSave, name, updatedAt: now };
+        const updatedProject = { ...savedProjects[projectIndex], ...projectDataToSave, name, updatedAt: now }; // Ensure 'name' here is also the new name
         newSavedProjects = [...savedProjects];
         newSavedProjects[projectIndex] = updatedProject;
         toast({ title: "Project Updated", description: `Project "${name}" has been updated.` });
@@ -200,15 +212,35 @@ export default function CodeCraftEstimatorPage() {
     setSavedProjects(newSavedProjects);
     localStorage.setItem(SAVED_PROJECTS_KEY, JSON.stringify(newSavedProjects));
     setCurrentProjectId(newCurrentProjectId);
-    setCurrentProjectName(newCurrentProjectName);
+    setCurrentProjectName(newCurrentProjectName); // Update currentProjectName state
     localStorage.setItem(CURRENT_PROJECT_ID_KEY, newCurrentProjectId as string);
     setIsProjectsDialogOpen(false);
   }, [requirementsDocument, modules, risks, effortMultiplier, hourlyRate, fixedCosts, totalBaseTimeInMinutes, savedProjects, currentProjectId, toast]);
 
   const handleLoadProject = useCallback((projectId: string) => {
-    const projectToLoad = savedProjects.find(p => p.id === projectId);
+    const projectToLoadFromStorage = localStorage.getItem(SAVED_PROJECTS_KEY);
+    if (!projectToLoadFromStorage) return;
+    
+    const allSavedProjects = JSON.parse(projectToLoadFromStorage) as Project[];
+    const projectToLoad = allSavedProjects.find(p => p.id === projectId);
+
     if (projectToLoad) {
-      loadProjectDataIntoState(projectToLoad);
+       // Rehydrate Decimal fields before loading into state
+      const rehydratedProjectData: ProjectData = {
+        ...projectToLoad,
+        modules: projectToLoad.modules.map(m => ({
+          ...m,
+          tasks: m.tasks.map(t => ({
+            ...t,
+            weightedAverageTimeInMinutes: new Decimal(t.weightedAverageTimeInMinutes)
+          }))
+        })),
+        totalBaseTimeInMinutes: projectToLoad.totalBaseTimeInMinutes,
+        totalAdjustedTimeInMinutes: projectToLoad.totalAdjustedTimeInMinutes,
+        totalProjectCost: projectToLoad.totalProjectCost,
+      };
+
+      loadProjectDataIntoState(rehydratedProjectData);
       setCurrentProjectId(projectToLoad.id);
       setCurrentProjectName(projectToLoad.name);
       localStorage.setItem(CURRENT_PROJECT_ID_KEY, projectToLoad.id);
@@ -217,7 +249,7 @@ export default function CodeCraftEstimatorPage() {
     } else {
       toast({ title: "Error Loading Project", description: "Could not find the selected project.", variant: "destructive" });
     }
-  }, [savedProjects, toast]);
+  }, [toast]); // Removed savedProjects dependency as we fetch fresh from storage
 
   const handleNewProject = useCallback(() => {
     setRequirementsDocument('');
@@ -260,17 +292,18 @@ export default function CodeCraftEstimatorPage() {
       const importedRaw = JSON.parse(fileContent);
 
       if (
+        typeof importedRaw.name !== 'string' || // Check for name
         typeof importedRaw.requirementsDocument !== 'string' ||
         !Array.isArray(importedRaw.modules) ||
         !Array.isArray(importedRaw.risks) ||
         typeof importedRaw.effortMultiplier !== 'number' ||
         typeof importedRaw.hourlyRate !== 'number' 
       ) {
-        toast({ title: "Invalid Project File", description: "The file is not a valid CodeCraft project. Required fields might be missing or of wrong type.", variant: "destructive" });
+        toast({ title: "Invalid Project File", description: "The file is not a valid CodeCraft project. Required fields (including 'name') might be missing or of wrong type.", variant: "destructive" });
         return;
       }
   
-      const importedData = importedRaw as Partial<ProjectData & { name?: string, id?: string, createdAt?: string, updatedAt?: string }>;
+      const importedData = importedRaw as Partial<ProjectData & { id?: string, createdAt?: string, updatedAt?: string }>;
   
       const validatedModules: Module[] = (importedData.modules || []).map((m: any) => ({
         id: m.id || crypto.randomUUID(),
@@ -282,7 +315,8 @@ export default function CodeCraftEstimatorPage() {
           mostLikelyTime: Number(t.mostLikelyTime || 0),
           pessimisticTime: Number(t.pessimisticTime || 0),
           timeUnit: t.timeUnit || 'hours',
-          weightedAverageTimeInMinutes: t.weightedAverageTimeInMinutes || 0,
+          category: t.category || undefined,
+          weightedAverageTimeInMinutes: new Decimal(t.weightedAverageTimeInMinutes || 0).toString(), // Store as string
         } as Task)),
       }));
       
@@ -290,16 +324,16 @@ export default function CodeCraftEstimatorPage() {
 
       const newProject: Project = {
         id: crypto.randomUUID(), 
-        name: importedData.name || `Imported Project - ${new Date().toLocaleDateString()}`,
+        name: importedData.name as string, // Use imported name
         requirementsDocument: importedData.requirementsDocument as string,
         modules: validatedModules,
         risks: validatedRisks,
         effortMultiplier: importedData.effortMultiplier as number,
         hourlyRate: importedData.hourlyRate as number,
         fixedCosts: String(importedData.fixedCosts || '0'),
-        totalBaseTimeInMinutes: String(importedData.totalBaseTimeInMinutes || '0'),
-        totalAdjustedTimeInMinutes: String(importedData.totalAdjustedTimeInMinutes || '0'),
-        totalProjectCost: String(importedData.totalProjectCost || '0'),
+        totalBaseTimeInMinutes: new Decimal(importedData.totalBaseTimeInMinutes || '0').toString(),
+        totalAdjustedTimeInMinutes: new Decimal(importedData.totalAdjustedTimeInMinutes || '0').toString(),
+        totalProjectCost: new Decimal(importedData.totalProjectCost || '0').toString(),
         createdAt: importedData.createdAt && !isNaN(new Date(importedData.createdAt).getTime()) ? importedData.createdAt : new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
@@ -308,7 +342,7 @@ export default function CodeCraftEstimatorPage() {
       setSavedProjects(newSavedProjects);
       localStorage.setItem(SAVED_PROJECTS_KEY, JSON.stringify(newSavedProjects));
       toast({ title: "Project Imported", description: `Project "${newProject.name}" added. You can load it now.` });
-      setIsProjectsDialogOpen(true);
+      setIsProjectsDialogOpen(true); // Keep dialog open to allow loading
     } catch (error) {
       console.error("Error importing project:", error);
       toast({ title: "Import Error", description: "Could not parse or import. Ensure it's valid JSON and has all required fields.", variant: "destructive" });
@@ -317,16 +351,23 @@ export default function CodeCraftEstimatorPage() {
   
   const getCurrentProjectDataForDialog = (): ProjectData | null => {
     if (!currentProjectId && !requirementsDocument && modules.length === 0 && risks.length === 0 && fixedCosts === '0') {
-        return null;
+        return null; // No active project data to form a basis for saving
     }
     const totalAdjustedTime = totalBaseTimeInMinutes.times(new Decimal(effortMultiplier));
     const costFromTime = hourlyRate > 0 ? totalAdjustedTime.dividedBy(60).times(new Decimal(hourlyRate)) : new Decimal(0);
     const totalCost = costFromTime.plus(new Decimal(fixedCosts));
 
+    // When providing data for the dialog (e.g. for saving or exporting from settings)
+    // use currentProjectName if available, otherwise it's an "Untitled Project" being worked on.
+    const nameForCurrentData = currentProjectName || "Untitled Project";
+
     return {
-        name,
+        name: nameForCurrentData, // Use currentProjectName or a default
         requirementsDocument,
-        modules,
+        modules: modules.map(m => ({ // Ensure Decimals are stringified for this context if needed later
+          ...m,
+          tasks: m.tasks.map(t => ({...t, weightedAverageTimeInMinutes: t.weightedAverageTimeInMinutes.toString()}))
+        })),
         risks: validateAndUpgradeRisks(risks),
         effortMultiplier,
         hourlyRate,
@@ -373,7 +414,7 @@ export default function CodeCraftEstimatorPage() {
           </TabsContent>
           <TabsContent value="settings">
             <ProjectSettingsSection
-              projectData={getCurrentProjectDataForDialog()}
+              projectData={getCurrentProjectDataForDialog()} // This now passes the correct name
               requirementsDocument={requirementsDocument} 
               modules={modules} 
               risks={risks} 
@@ -405,10 +446,10 @@ export default function CodeCraftEstimatorPage() {
         onOpenChange={setIsProjectsDialogOpen}
         projects={savedProjects}
         currentProjectId={currentProjectId}
-        currentProjectName={currentProjectName}
-        currentProjectData={getCurrentProjectDataForDialog()}
+        currentProjectName={currentProjectName} // Used to pre-fill name input in dialog
+        currentProjectData={getCurrentProjectDataForDialog()} // Data context for saving
         onLoadProject={handleLoadProject}
-        onSaveProject={handleSaveCurrentProject}
+        onSaveProject={handleSaveCurrentProject} // This receives the new name from dialog
         onNewProject={handleNewProject}
         onDeleteProject={handleDeleteProject}
         onImportProject={handleImportProjectFromFile}
@@ -416,3 +457,4 @@ export default function CodeCraftEstimatorPage() {
     </div>
   );
 }
+
