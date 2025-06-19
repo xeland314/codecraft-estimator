@@ -174,7 +174,7 @@ export default function CodeCraftEstimatorPage() {
       requirementsDocument,
       modules: modules.map(m => ({ // Ensure Decimals are stringified for storage
         ...m,
-        tasks: m.tasks.map(t => ({...t, weightedAverageTimeInMinutes: t.weightedAverageTimeInMinutes.toString()}))
+        tasks: m.tasks.map(t => ({...t, weightedAverageTimeInMinutes: t.weightedAverageTimeInMinutes}))
       })),
       risks: validateAndUpgradeRisks(risks), 
       effortMultiplier,
@@ -316,7 +316,7 @@ export default function CodeCraftEstimatorPage() {
           pessimisticTime: Number(t.pessimisticTime || 0),
           timeUnit: t.timeUnit || 'hours',
           category: t.category || undefined,
-          weightedAverageTimeInMinutes: new Decimal(t.weightedAverageTimeInMinutes || 0).toString(), // Store as string
+          weightedAverageTimeInMinutes: new Decimal(t.weightedAverageTimeInMinutes || 0), // Store as string
         } as Task)),
       }));
       
@@ -366,7 +366,7 @@ export default function CodeCraftEstimatorPage() {
         requirementsDocument,
         modules: modules.map(m => ({ // Ensure Decimals are stringified for this context if needed later
           ...m,
-          tasks: m.tasks.map(t => ({...t, weightedAverageTimeInMinutes: t.weightedAverageTimeInMinutes.toString()}))
+          tasks: m.tasks.map(t => ({...t, weightedAverageTimeInMinutes: t.weightedAverageTimeInMinutes}))
         })),
         risks: validateAndUpgradeRisks(risks),
         effortMultiplier,
