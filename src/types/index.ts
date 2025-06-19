@@ -60,6 +60,7 @@ export interface Risk {
 
 // Represents the core data of a project, used for saving and loading
 export interface ProjectData {
+  name: string;
   requirementsDocument: string;
   modules: Module[];
   risks: Risk[];
