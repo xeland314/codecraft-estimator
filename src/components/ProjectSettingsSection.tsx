@@ -297,7 +297,7 @@ export default function ProjectSettingsSection({
           {risks.length > 0 && (
             <div className="space-y-2">
               <h3 className="font-headline text-lg">Identified Risks:</h3>
-              <ScrollArea className="max-h-60 pr-2">
+              <ScrollArea className="max-h-60 pr-2 overflow-y-auto">
                 <ul className="space-y-2">
                   {risks.map(risk => (
                     <li key={risk.id} className="p-3 border border-border rounded-md bg-background shadow-sm flex justify-between items-center">
