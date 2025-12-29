@@ -10,8 +10,9 @@
  * - AugmentTasksOutput - The return type for the augmentTasks function.
  */
 
-import {ai} from '@/ai/genkit';
-import {z} from 'genkit';
+import { ai } from '@/ai/genkit';
+import { z } from 'genkit';
+import { googleAI } from '@genkit-ai/googleai';
 
 const AugmentTasksInputSchema = z.object({
   moduleDescription: z
@@ -20,11 +21,8 @@ const AugmentTasksInputSchema = z.object({
   existingTasks: z
     .string()
     .describe('The existing tasks in the module, as a string.'),
-  prompt: z
-    .string()
-    .describe(
-      'A prompt to guide the addition of more tasks to the current module and adjust task times.'
-    ),
+  prompt: z.string().describe('A prompt to guide the addition of more tasks to the current module and adjust task times.'),
+  apiKey: z.string().optional().describe('Optional Gemini API Key provided by the user.'),
 });
 export type AugmentTasksInput = z.infer<typeof AugmentTasksInputSchema>;
 
@@ -41,8 +39,9 @@ export async function augmentTasks(input: AugmentTasksInput): Promise<AugmentTas
 
 const prompt = ai.definePrompt({
   name: 'augmentTasksPrompt',
-  input: {schema: AugmentTasksInputSchema},
-  output: {schema: AugmentTasksOutputSchema},
+  model: googleAI.model('gemini-2.5-flash'),
+  input: { schema: AugmentTasksInputSchema },
+  output: { schema: AugmentTasksOutputSchema },
   prompt: `You are a project management assistant. You will be provided with a module description, a list of existing tasks, and a prompt.
 Your job is to augment the existing tasks with new tasks and adjusted time estimates based on the prompt.
 
@@ -60,8 +59,31 @@ const augmentTasksFlow = ai.defineFlow(
     inputSchema: AugmentTasksInputSchema,
     outputSchema: AugmentTasksOutputSchema,
   },
-  async input => {
-    const {output} = await prompt(input);
+  async (input) => {
+    if (input.apiKey) {
+      console.log("Using custom API key for augmentTasks");
+
+      const response = await ai.generate({
+        model: googleAI.model('gemini-2.5-flash'),
+        prompt: `You are a project management assistant. You will be provided with a module description, a list of existing tasks, and a prompt.
+Your job is to augment the existing tasks with new tasks and adjusted time estimates based on the prompt.
+
+Module Description: ${input.moduleDescription}
+Existing Tasks: ${input.existingTasks}
+Prompt: ${input.prompt}
+
+Return the augmented tasks with adjusted time estimates as a string.
+`,
+        config: {
+          apiKey: input.apiKey, // Use a different API key for this request
+        },
+        output: { schema: AugmentTasksOutputSchema },
+      });
+      return response.output!;
+    }
+
+    // Default path
+    const { output } = await prompt(input);
     return output!;
   }
 );

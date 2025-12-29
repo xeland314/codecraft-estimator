@@ -19,6 +19,7 @@ import { useToast } from '@/hooks/use-toast';
 interface ModulesSectionProps {
   modules: Module[];
   setModules: React.Dispatch<React.SetStateAction<Module[]>>;
+  apiKey: string;
 }
 
 // Helper to parse augmented tasks string
@@ -44,13 +45,13 @@ const parseAugmentedTasks = (tasksString: string): Partial<Task>[] => {
 };
 
 
-export default function ModulesSection({ modules, setModules }: ModulesSectionProps) {
+export default function ModulesSection({ modules, setModules, apiKey }: ModulesSectionProps) {
   const [newModuleName, setNewModuleName] = useState('');
-  
+
   const [newTask, setNewTask] = useState<{ [moduleId: string]: Partial<Task> }>({});
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [editingTaskData, setEditingTaskData] = useState<Partial<Task> | null>(null);
-  
+
   const [aiTaskPrompt, setAiTaskPrompt] = useState<{ [moduleId: string]: string }>({});
   const [isAugmenting, setIsAugmenting] = useState<{ [moduleId: string]: boolean }>({});
   const { toast } = useToast();
@@ -78,7 +79,7 @@ export default function ModulesSection({ modules, setModules }: ModulesSectionPr
       }
     }));
   };
-  
+
   const handleEditingTaskInputChange = (field: keyof Task, value: string | number, unitFieldOrCategory?: boolean) => {
     setEditingTaskData(prev => ({
       ...prev,
@@ -122,7 +123,7 @@ export default function ModulesSection({ modules, setModules }: ModulesSectionPr
 
   const handleUpdateTask = (moduleId: string) => {
     if (!editingTaskId || !editingTaskData) return;
-    
+
     const { description, optimisticTime, mostLikelyTime, pessimisticTime, timeUnit, category } = editingTaskData;
 
     if (!description?.trim() || optimisticTime == null || mostLikelyTime == null || pessimisticTime == null || !timeUnit) {
@@ -135,20 +136,20 @@ export default function ModulesSection({ modules, setModules }: ModulesSectionPr
     }
 
     const weightedAverageTimeInMinutes = calculateWeightedAverage(optimisticTime, mostLikelyTime, pessimisticTime, timeUnit);
-    const updatedTask: Task = { 
-        id: editingTaskId, 
-        description, 
-        optimisticTime, 
-        pessimisticTime, 
-        mostLikelyTime, 
-        timeUnit, 
-        category: category || undefined, 
-        weightedAverageTimeInMinutes
+    const updatedTask: Task = {
+      id: editingTaskId,
+      description,
+      optimisticTime,
+      pessimisticTime,
+      mostLikelyTime,
+      timeUnit,
+      category: category || undefined,
+      weightedAverageTimeInMinutes
     };
 
-    setModules(prev => prev.map(m => 
-      m.id === moduleId 
-        ? { ...m, tasks: m.tasks.map(t => t.id === editingTaskId ? updatedTask : t) } 
+    setModules(prev => prev.map(m =>
+      m.id === moduleId
+        ? { ...m, tasks: m.tasks.map(t => t.id === editingTaskId ? updatedTask : t) }
         : m
     ));
     setEditingTaskId(null);
@@ -157,7 +158,7 @@ export default function ModulesSection({ modules, setModules }: ModulesSectionPr
 
   const startEditingTask = (task: Task) => {
     setEditingTaskId(task.id);
-    setEditingTaskData({...task});
+    setEditingTaskData({ ...task });
   };
 
 
@@ -175,12 +176,12 @@ export default function ModulesSection({ modules, setModules }: ModulesSectionPr
       return;
     }
 
-    setIsAugmenting(prev => ({...prev, [moduleId]: true}));
+    setIsAugmenting(prev => ({ ...prev, [moduleId]: true }));
 
-    const existingTasksString = module.tasks.map(t => 
+    const existingTasksString = module.tasks.map(t =>
       `${t.description} | ${t.optimisticTime} | ${t.mostLikelyTime} | ${t.pessimisticTime} | ${t.timeUnit}`
     ).join('\n');
-    
+
     const augmentationPrompt = `${currentAiTaskPrompt}. Ensure each new task is on a new line and follows this format: 'TASK_DESCRIPTION | OPTIMISTIC_TIME | MOST_LIKELY_TIME | PESSIMISTIC_TIME | TIME_UNIT (minutes/hours/days)'. Adjust existing task times if necessary based on your reasoning by re-listing them in the same format. Do not assign categories.`;
 
     try {
@@ -188,14 +189,15 @@ export default function ModulesSection({ modules, setModules }: ModulesSectionPr
         moduleDescription: module.name,
         existingTasks: existingTasksString,
         prompt: augmentationPrompt,
+        apiKey: apiKey || undefined
       });
-      
+
       const augmentedTaskData = parseAugmentedTasks(result.augmentedTasks);
       if (augmentedTaskData.length === 0 && result.augmentedTasks.trim() !== "") {
-         toast({ title: "AI Augmentation", description: "AI returned tasks in an unparseable format. Raw: " + result.augmentedTasks, variant: "destructive", duration: 10000 });
+        toast({ title: "AI Augmentation", description: "AI returned tasks in an unparseable format. Raw: " + result.augmentedTasks, variant: "destructive", duration: 10000 });
       } else if (augmentedTaskData.length > 0) {
         const newTasks: Task[] = augmentedTaskData.map(data => {
-           const weightedAverageTimeInMinutes = calculateWeightedAverage(
+          const weightedAverageTimeInMinutes = calculateWeightedAverage(
             data.optimisticTime!, data.mostLikelyTime!, data.pessimisticTime!, data.timeUnit!
           );
           return {
@@ -212,7 +214,7 @@ export default function ModulesSection({ modules, setModules }: ModulesSectionPr
 
         setModules(prev => prev.map(m => m.id === moduleId ? { ...m, tasks: [...newTasks] } : m)); // Replaces tasks with AI output
         toast({ title: "Tasks Augmented", description: "Tasks have been updated by AI. Review the changes and assign categories manually if needed." });
-        setAiTaskPrompt(prev => ({...prev, [moduleId]: ''}));
+        setAiTaskPrompt(prev => ({ ...prev, [moduleId]: '' }));
       } else {
         toast({ title: "No Tasks Generated", description: "AI did not suggest new tasks or adjustments." });
       }
@@ -221,10 +223,10 @@ export default function ModulesSection({ modules, setModules }: ModulesSectionPr
       console.error("Error augmenting tasks:", error);
       toast({ title: "AI Error", description: "Failed to augment tasks. Please try again.", variant: "destructive" });
     } finally {
-      setIsAugmenting(prev => ({...prev, [moduleId]: false}));
+      setIsAugmenting(prev => ({ ...prev, [moduleId]: false }));
     }
   };
-  
+
 
   return (
     <Card className="shadow-lg">
@@ -262,27 +264,27 @@ export default function ModulesSection({ modules, setModules }: ModulesSectionPr
               <AccordionTrigger className="px-4 py-3 hover:bg-secondary/50 rounded-t-lg">
                 <div className="flex justify-between items-center w-full">
                   <span className="font-headline text-lg text-primary">{module.name}</span>
-                    <Button asChild variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); handleDeleteModule(module.id); }} className="text-destructive hover:bg-destructive/10">
-                        <div><Trash2 className="h-4 w-4" /></div>
-                    </Button>
+                  <Button asChild variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); handleDeleteModule(module.id); }} className="text-destructive hover:bg-destructive/10">
+                    <div><Trash2 className="h-4 w-4" /></div>
+                  </Button>
                 </div>
               </AccordionTrigger>
               <AccordionContent className="px-4 py-3 border-t border-border space-y-4">
                 {/* Add Task Form */}
                 <Card className="bg-secondary/30">
                   <CardHeader>
-                    <CardTitle className="text-md font-headline flex items-center"><ListChecks className="mr-2 h-5 w-5 text-primary/80"/>Add New Task</CardTitle>
+                    <CardTitle className="text-md font-headline flex items-center"><ListChecks className="mr-2 h-5 w-5 text-primary/80" />Add New Task</CardTitle>
                   </CardHeader>
                   <CardContent className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-7 gap-3 items-end">
-                    <Textarea 
-                      placeholder="Task description" 
-                      value={newTask[module.id]?.description || ''} 
-                      onChange={(e) => handleTaskInputChange(module.id, 'description', e.target.value, true)} 
+                    <Textarea
+                      placeholder="Task description"
+                      value={newTask[module.id]?.description || ''}
+                      onChange={(e) => handleTaskInputChange(module.id, 'description', e.target.value, true)}
                       className="md:col-span-3 lg:col-span-2 min-h-[40px] focus:ring-accent"
                     />
-                    <Input type="number" placeholder="Optimistic" value={newTask[module.id]?.optimisticTime || ''} onChange={(e) => handleTaskInputChange(module.id, 'optimisticTime', e.target.value)} className="focus:ring-accent" min="0"/>
-                    <Input type="number" placeholder="Most Likely" value={newTask[module.id]?.mostLikelyTime || ''} onChange={(e) => handleTaskInputChange(module.id, 'mostLikelyTime', e.target.value)} className="focus:ring-accent" min="0"/>
-                    <Input type="number" placeholder="Pessimistic" value={newTask[module.id]?.pessimisticTime || ''} onChange={(e) => handleTaskInputChange(module.id, 'pessimisticTime', e.target.value)} className="focus:ring-accent" min="0"/>
+                    <Input type="number" placeholder="Optimistic" value={newTask[module.id]?.optimisticTime || ''} onChange={(e) => handleTaskInputChange(module.id, 'optimisticTime', e.target.value)} className="focus:ring-accent" min="0" />
+                    <Input type="number" placeholder="Most Likely" value={newTask[module.id]?.mostLikelyTime || ''} onChange={(e) => handleTaskInputChange(module.id, 'mostLikelyTime', e.target.value)} className="focus:ring-accent" min="0" />
+                    <Input type="number" placeholder="Pessimistic" value={newTask[module.id]?.pessimisticTime || ''} onChange={(e) => handleTaskInputChange(module.id, 'pessimisticTime', e.target.value)} className="focus:ring-accent" min="0" />
                     <Select onValueChange={(val) => handleTaskInputChange(module.id, 'timeUnit', val, true)} value={newTask[module.id]?.timeUnit || ''}>
                       <SelectTrigger className="focus:ring-accent"><SelectValue placeholder="Unit" /></SelectTrigger>
                       <SelectContent>
@@ -313,10 +315,10 @@ export default function ModulesSection({ modules, setModules }: ModulesSectionPr
                         {editingTaskId === task.id ? (
                           // Editing view
                           <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-8 gap-2 items-center">
-                            <Textarea value={editingTaskData?.description || ''} onChange={(e) => handleEditingTaskInputChange('description', e.target.value, true)} className="md:col-span-3 lg:col-span-2 min-h-[40px] focus:ring-accent"/>
-                            <Input type="number" value={editingTaskData?.optimisticTime || ''} onChange={(e) => handleEditingTaskInputChange('optimisticTime', e.target.value)} className="focus:ring-accent" min="0"/>
-                            <Input type="number" value={editingTaskData?.mostLikelyTime || ''} onChange={(e) => handleEditingTaskInputChange('mostLikelyTime', e.target.value)} className="focus:ring-accent" min="0"/>
-                            <Input type="number" value={editingTaskData?.pessimisticTime || ''} onChange={(e) => handleEditingTaskInputChange('pessimisticTime', e.target.value)} className="focus:ring-accent" min="0"/>
+                            <Textarea value={editingTaskData?.description || ''} onChange={(e) => handleEditingTaskInputChange('description', e.target.value, true)} className="md:col-span-3 lg:col-span-2 min-h-[40px] focus:ring-accent" />
+                            <Input type="number" value={editingTaskData?.optimisticTime || ''} onChange={(e) => handleEditingTaskInputChange('optimisticTime', e.target.value)} className="focus:ring-accent" min="0" />
+                            <Input type="number" value={editingTaskData?.mostLikelyTime || ''} onChange={(e) => handleEditingTaskInputChange('mostLikelyTime', e.target.value)} className="focus:ring-accent" min="0" />
+                            <Input type="number" value={editingTaskData?.pessimisticTime || ''} onChange={(e) => handleEditingTaskInputChange('pessimisticTime', e.target.value)} className="focus:ring-accent" min="0" />
                             <Select onValueChange={(val) => handleEditingTaskInputChange('timeUnit', val, true)} value={editingTaskData?.timeUnit || ''}>
                               <SelectTrigger className="focus:ring-accent"><SelectValue placeholder="Unit" /></SelectTrigger>
                               <SelectContent>
@@ -325,15 +327,15 @@ export default function ModulesSection({ modules, setModules }: ModulesSectionPr
                                 <SelectItem value="days">Days</SelectItem>
                               </SelectContent>
                             </Select>
-                             <Select onValueChange={(val) => handleEditingTaskInputChange('category', val, true)} value={editingTaskData?.category || ''}>
+                            <Select onValueChange={(val) => handleEditingTaskInputChange('category', val, true)} value={editingTaskData?.category || ''}>
                               <SelectTrigger className="focus:ring-accent"><SelectValue placeholder="Category" /></SelectTrigger>
                               <SelectContent>
                                 {TASK_CATEGORIES.map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}
                               </SelectContent>
                             </Select>
                             <div className="flex gap-1">
-                              <Button onClick={() => handleUpdateTask(module.id)} size="icon" variant="ghost" className="text-green-600 hover:bg-green-600/10"><Save className="h-4 w-4"/></Button>
-                              <Button onClick={() => { setEditingTaskId(null); setEditingTaskData(null); }} size="icon" variant="ghost" className="text-muted-foreground hover:bg-muted-foreground/10"><Trash2 className="h-4 w-4"/> Cancel</Button> {/* Adjusted icon and text */}
+                              <Button onClick={() => handleUpdateTask(module.id)} size="icon" variant="ghost" className="text-green-600 hover:bg-green-600/10"><Save className="h-4 w-4" /></Button>
+                              <Button onClick={() => { setEditingTaskId(null); setEditingTaskData(null); }} size="icon" variant="ghost" className="text-muted-foreground hover:bg-muted-foreground/10"><Trash2 className="h-4 w-4" /> Cancel</Button> {/* Adjusted icon and text */}
                             </div>
                           </div>
                         ) : (
@@ -349,8 +351,8 @@ export default function ModulesSection({ modules, setModules }: ModulesSectionPr
                             <div className="text-right">
                               <p className="font-semibold text-primary">{formatTime(task.weightedAverageTimeInMinutes)}</p>
                               <div className="flex gap-1 mt-1">
-                                <Button onClick={() => startEditingTask(task)} size="icon" variant="ghost" className="text-blue-600 hover:bg-blue-600/10"><Edit3 className="h-4 w-4"/></Button>
-                                <Button onClick={() => handleDeleteTask(module.id, task.id)} size="icon" variant="ghost" className="text-destructive hover:bg-destructive/10"><Trash2 className="h-4 w-4"/></Button>
+                                <Button onClick={() => startEditingTask(task)} size="icon" variant="ghost" className="text-blue-600 hover:bg-blue-600/10"><Edit3 className="h-4 w-4" /></Button>
+                                <Button onClick={() => handleDeleteTask(module.id, task.id)} size="icon" variant="ghost" className="text-destructive hover:bg-destructive/10"><Trash2 className="h-4 w-4" /></Button>
                               </div>
                             </div>
                           </div>
@@ -361,26 +363,26 @@ export default function ModulesSection({ modules, setModules }: ModulesSectionPr
                 ) : (
                   <p className="text-muted-foreground text-sm">No tasks added to this module yet.</p>
                 )}
-                
+
                 {/* AI Task Augmentation */}
                 <Card className="mt-4 bg-secondary/30">
                   <CardHeader>
-                    <CardTitle className="text-md font-headline flex items-center"><Brain className="mr-2 h-5 w-5 text-primary/80"/>AI Task Augmentation</CardTitle>
+                    <CardTitle className="text-md font-headline flex items-center"><Brain className="mr-2 h-5 w-5 text-primary/80" />AI Task Augmentation</CardTitle>
                     <CardDescription className="text-xs">Let AI suggest additional tasks or refine estimates for this module. AI will replace existing tasks with its suggestions. Categories will need to be assigned manually after augmentation.</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-2">
-                    <Textarea 
-                      placeholder="e.g., Add tasks for user profile management and two-factor authentication." 
-                      value={aiTaskPrompt[module.id] || ''} 
-                      onChange={(e) => setAiTaskPrompt(prev => ({...prev, [module.id]: e.target.value}))}
+                    <Textarea
+                      placeholder="e.g., Add tasks for user profile management and two-factor authentication."
+                      value={aiTaskPrompt[module.id] || ''}
+                      onChange={(e) => setAiTaskPrompt(prev => ({ ...prev, [module.id]: e.target.value }))}
                       className="min-h-[60px] focus:ring-accent"
                     />
-                    <Button 
-                      onClick={() => handleAugmentTasks(module.id)} 
+                    <Button
+                      onClick={() => handleAugmentTasks(module.id)}
                       disabled={isAugmenting[module.id]}
                       className="w-full sm:w-auto bg-primary hover:bg-primary/90 text-primary-foreground"
                     >
-                      {isAugmenting[module.id] ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Brain className="mr-2 h-4 w-4"/>}
+                      {isAugmenting[module.id] ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Brain className="mr-2 h-4 w-4" />}
                       Augment Tasks with AI
                     </Button>
                   </CardContent>

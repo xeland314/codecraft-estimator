@@ -8,11 +8,13 @@
  * - SuggestRisksOutput - The return type for the suggestRisks function.
  */
 
-import {ai} from '@/ai/genkit';
-import {z} from 'genkit';
+import { ai } from '@/ai/genkit';
+import { z } from 'genkit';
+import { googleAI } from '@genkit-ai/googleai';
 
 const SuggestRisksInputSchema = z.object({
   projectDescription: z.string().describe('A description of the software project.'),
+  apiKey: z.string().optional().describe('Optional Gemini API Key provided by the user.'),
 });
 export type SuggestRisksInput = z.infer<typeof SuggestRisksInputSchema>;
 
@@ -30,8 +32,9 @@ export async function suggestRisks(
 
 const riskSuggestionPrompt = ai.definePrompt({
   name: 'suggestRisksPrompt',
-  input: {schema: SuggestRisksInputSchema},
-  output: {schema: SuggestRisksOutputSchema},
+  model: googleAI.model('gemini-2.5-flash'),
+  input: { schema: SuggestRisksInputSchema },
+  output: { schema: SuggestRisksOutputSchema },
   prompt: `You are an expert project manager and risk analyst.
 Based on the following project description, identify and list potential risks.
 For each risk, provide a concise description (around 5-15 words).
@@ -51,15 +54,43 @@ const suggestRisksFlow = ai.defineFlow(
     inputSchema: SuggestRisksInputSchema,
     outputSchema: SuggestRisksOutputSchema,
   },
-  async input => {
+  async (input) => {
     if (!input.projectDescription || input.projectDescription.trim() === "") {
-        return { suggestedRisks: [] };
+      return { suggestedRisks: [] };
     }
-    const {output} = await riskSuggestionPrompt(input);
-    if (!output) {
-        // Consider logging this or handling it more gracefully if the AI consistently fails.
-        // For now, returning an empty list if AI provides no output.
+
+    if (input.apiKey) {
+      console.log("Using custom API key for suggestRisks");
+      
+      const response = await ai.generate({
+        model: googleAI.model('gemini-2.5-flash'),
+        prompt: `You are an expert project manager and risk analyst.
+Based on the following project description, identify and list potential risks.
+For each risk, provide a concise description (around 5-15 words).
+Focus on common software project risks related to technology, team, scope, timeline, and external factors.
+Output a list of these risk descriptions.
+
+Project Description:
+${input.projectDescription}
+
+Return the output as a JSON object matching the provided schema.
+`,
+        config: {
+          apiKey: input.apiKey, // Use a different API key for this request
+        },
+        output: { schema: SuggestRisksOutputSchema },
+      });
+
+      if (!response) {
         return { suggestedRisks: [] };
+      }
+      return response.output!;
+    }
+
+    // Default path
+    const { output } = await riskSuggestionPrompt(input);
+    if (!output) {
+      return { suggestedRisks: [] };
     }
     return output;
   }

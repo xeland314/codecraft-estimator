@@ -12,7 +12,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Slider } from "@/components/ui/slider"
-import { ShieldAlert, CircleDollarSign, PlusCircle, Trash2, TrendingUp, Download, Brain, Loader2, ListChecks, Layers } from 'lucide-react';
+import { ShieldAlert, CircleDollarSign, PlusCircle, Trash2, TrendingUp, Download, Brain, Loader2, ListChecks, Layers, KeyRound } from 'lucide-react';
 import { convertToMinutes, formatTime } from '@/lib/timeUtils';
 import { useToast } from '@/hooks/use-toast';
 import { Decimal } from 'decimal.js';
@@ -33,6 +33,8 @@ interface ProjectSettingsSectionProps {
   setFixedCosts: (value: string) => void;
   totalBaseTimeInMinutes: Decimal;
   totalTasksTimeInMinutes: Decimal;
+  apiKey: string;
+  setApiKey: (key: string) => void;
 }
 
 export default function ProjectSettingsSection({
@@ -48,8 +50,10 @@ export default function ProjectSettingsSection({
   fixedCosts,
   setFixedCosts,
   totalBaseTimeInMinutes,
-  totalTasksTimeInMinutes
-}: ProjectSettingsSectionProps) {
+  totalTasksTimeInMinutes,
+  apiKey,
+  setApiKey
+}: Readonly<ProjectSettingsSectionProps>) {
   const [newRisk, setNewRisk] = useState<Partial<Omit<Risk, 'id' | 'riskTimeInMinutes'>> & { timeEstimate?: number, timeUnit?: TimeUnit }>({ probability: 'Medium', impactSeverity: 'Medium' });
   const [isSuggestingRisks, setIsSuggestingRisks] = useState(false);
   const [aiSuggestedRiskDescriptions, setAiSuggestedRiskDescriptions] = useState<string[]>([]);
@@ -89,7 +93,10 @@ export default function ProjectSettingsSection({
     setIsSuggestingRisks(true);
     setAiSuggestedRiskDescriptions([]);
     try {
-      const result: SuggestRisksOutput = await suggestRisks({ projectDescription: requirementsDocument });
+      const result: SuggestRisksOutput = await suggestRisks({
+        projectDescription: requirementsDocument,
+        apiKey: apiKey || undefined
+      });
       if (result.suggestedRisks && result.suggestedRisks.length > 0) {
         setAiSuggestedRiskDescriptions(result.suggestedRisks);
         toast({ title: "AI Risk Suggestions", description: "AI has suggested potential risks. Click a suggestion to pre-fill the risk description." });
@@ -108,11 +115,11 @@ export default function ProjectSettingsSection({
     setNewRisk(prev => ({ ...prev, description }));
     // Scroll to the new risk section and focus the description input
     if (newRiskDescriptionRef.current) {
-        newRiskDescriptionRef.current.focus();
-        newRiskDescriptionRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      newRiskDescriptionRef.current.focus();
+      newRiskDescriptionRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
     } else if (newRiskTimeEstimateRef.current) {
-        newRiskTimeEstimateRef.current.focus();
-        newRiskTimeEstimateRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      newRiskTimeEstimateRef.current.focus();
+      newRiskTimeEstimateRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
   };
 
@@ -138,21 +145,21 @@ export default function ProjectSettingsSection({
       });
     });
     return Object.entries(categoryMap)
-                 .map(([name, time]) => ({ name, time }))
-                 .sort((a, b) => TASK_CATEGORIES.indexOf(a.name as TaskCategory) - TASK_CATEGORIES.indexOf(b.name as TaskCategory)); // Sort by predefined order
+      .map(([name, time]) => ({ name, time }))
+      .sort((a, b) => TASK_CATEGORIES.indexOf(a.name as TaskCategory) - TASK_CATEGORIES.indexOf(b.name as TaskCategory)); // Sort by predefined order
   }, [modules]);
 
 
   const handleExportProject = () => {
     if (!projectData) {
-       toast({
+      toast({
         title: "No Project Data",
         description: "There is no current project data to export. Save the project first or add some data.",
         variant: "destructive",
       });
       return;
     }
-    
+
     const exportableProjectData = {
       ...projectData,
       fixedCosts: fixedCostsDecimal.toString(), // Ensure fixedCosts is in the export
@@ -211,10 +218,31 @@ export default function ProjectSettingsSection({
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-           {/* AI Risk Suggestion */}
+
+          {/* API Key Input */}
+          <div className="space-y-2 p-4 border border-border rounded-lg bg-secondary/30">
+            <h3 className="font-headline text-lg flex items-center"><KeyRound className="mr-2 h-5 w-5 text-primary/80" />Gemini API Key</h3>
+            <div className="space-y-1">
+              <Label htmlFor="api-key" className="text-sm">Custom API Key (Optional)</Label>
+              <Input
+                id="api-key"
+                type="password"
+                placeholder="Enter your Gemini API Key"
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                className="focus:ring-accent"
+              />
+              <p className="text-xs text-muted-foreground">
+                Your key is stored locally in your browser and is only used for AI requests. It will be automatically removed after 24 hours of inactivity.
+                Leave empty to try using the system's default key (if configured).
+              </p>
+            </div>
+          </div>
+
+          {/* AI Risk Suggestion */}
           <Card className="bg-secondary/30">
             <CardHeader>
-              <CardTitle className="text-md font-headline flex items-center"><Brain className="mr-2 h-5 w-5 text-primary/80"/>AI Risk Suggestions</CardTitle>
+              <CardTitle className="text-md font-headline flex items-center"><Brain className="mr-2 h-5 w-5 text-primary/80" />AI Risk Suggestions</CardTitle>
               <CardDescription className="text-xs">Let AI suggest potential risks based on the project description/requirements document.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-2">
@@ -243,21 +271,21 @@ export default function ProjectSettingsSection({
 
           {/* Add New Risk Form */}
           <div id="add-new-risk-form" className="space-y-3 p-4 border border-border rounded-lg bg-secondary/30">
-            <h3 className="font-headline text-lg flex items-center"><ListChecks className="mr-2 h-5 w-5 text-primary/80"/>Add New Risk</h3>
-            <Textarea 
+            <h3 className="font-headline text-lg flex items-center"><ListChecks className="mr-2 h-5 w-5 text-primary/80" />Add New Risk</h3>
+            <Textarea
               ref={newRiskDescriptionRef}
-              placeholder="Risk description (e.g., Third-party API integration delay)" 
-              value={newRisk.description || ''} 
-              onChange={(e) => setNewRisk(prev => ({ ...prev, description: e.target.value }))} 
+              placeholder="Risk description (e.g., Third-party API integration delay)"
+              value={newRisk.description || ''}
+              onChange={(e) => setNewRisk(prev => ({ ...prev, description: e.target.value }))}
               className="focus:ring-accent min-h-[60px]"
             />
             <div className="grid grid-cols-2 gap-2">
-              <Input 
+              <Input
                 ref={newRiskTimeEstimateRef}
-                type="number" 
-                placeholder="Time Est." 
-                value={newRisk.timeEstimate === undefined ? '' : newRisk.timeEstimate} 
-                onChange={(e) => setNewRisk(prev => ({ ...prev, timeEstimate: e.target.value === '' ? undefined : Number(e.target.value) }))} 
+                type="number"
+                placeholder="Time Est."
+                value={newRisk.timeEstimate === undefined ? '' : newRisk.timeEstimate}
+                onChange={(e) => setNewRisk(prev => ({ ...prev, timeEstimate: e.target.value === '' ? undefined : Number(e.target.value) }))}
                 className="focus:ring-accent"
                 min="0"
               />
@@ -270,25 +298,25 @@ export default function ProjectSettingsSection({
                 </SelectContent>
               </Select>
             </div>
-             <div className="grid grid-cols-2 gap-2">
-                <div>
-                    <Label htmlFor="risk-probability" className="text-xs">Probability</Label>
-                    <Select onValueChange={(val) => setNewRisk(prev => ({ ...prev, probability: val as RiskLevel }))} value={newRisk.probability || 'Medium'}>
-                        <SelectTrigger id="risk-probability" className="focus:ring-accent w-full"><SelectValue placeholder="Probability" /></SelectTrigger>
-                        <SelectContent>
-                        {riskLevels.map(level => <SelectItem key={`prob-${level}`} value={level}>{level}</SelectItem>)}
-                        </SelectContent>
-                    </Select>
-                </div>
-                <div>
-                    <Label htmlFor="risk-impact" className="text-xs">Impact Severity</Label>
-                    <Select onValueChange={(val) => setNewRisk(prev => ({ ...prev, impactSeverity: val as RiskLevel }))} value={newRisk.impactSeverity || 'Medium'}>
-                        <SelectTrigger id="risk-impact" className="focus:ring-accent w-full"><SelectValue placeholder="Impact" /></SelectTrigger>
-                        <SelectContent>
-                        {riskLevels.map(level => <SelectItem key={`impact-${level}`} value={level}>{level}</SelectItem>)}
-                        </SelectContent>
-                    </Select>
-                </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <Label htmlFor="risk-probability" className="text-xs">Probability</Label>
+                <Select onValueChange={(val) => setNewRisk(prev => ({ ...prev, probability: val as RiskLevel }))} value={newRisk.probability || 'Medium'}>
+                  <SelectTrigger id="risk-probability" className="focus:ring-accent w-full"><SelectValue placeholder="Probability" /></SelectTrigger>
+                  <SelectContent>
+                    {riskLevels.map(level => <SelectItem key={`prob-${level}`} value={level}>{level}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="risk-impact" className="text-xs">Impact Severity</Label>
+                <Select onValueChange={(val) => setNewRisk(prev => ({ ...prev, impactSeverity: val as RiskLevel }))} value={newRisk.impactSeverity || 'Medium'}>
+                  <SelectTrigger id="risk-impact" className="focus:ring-accent w-full"><SelectValue placeholder="Impact" /></SelectTrigger>
+                  <SelectContent>
+                    {riskLevels.map(level => <SelectItem key={`impact-${level}`} value={level}>{level}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             <Button onClick={handleAddRisk} className="w-full bg-accent hover:bg-accent/90 text-accent-foreground">
               <PlusCircle className="mr-2 h-4 w-4" /> Add Risk
@@ -318,7 +346,7 @@ export default function ProjectSettingsSection({
             </div>
           )}
           {risks.length === 0 && aiSuggestedRiskDescriptions.length === 0 && <p className="text-muted-foreground text-sm text-center">No risks added yet. You can add them manually or use AI suggestions.</p>}
-          
+
           <div className="space-y-2 pt-4">
             <Label htmlFor="effort-multiplier" className="font-headline text-lg">Overall Effort Multiplier: {effortMultiplier.toFixed(1)}x</Label>
             <div className="flex items-center gap-2">
@@ -361,7 +389,7 @@ export default function ProjectSettingsSection({
               min="0"
             />
           </div>
-           <div>
+          <div>
             <Label htmlFor="fixed-costs" className="font-headline text-lg">Fixed Project Costs ($)</Label>
             <Input
               id="fixed-costs"
@@ -389,7 +417,7 @@ export default function ProjectSettingsSection({
             <p className="text-sm text-muted-foreground">Total Adjusted Estimated Time (Factoring Multiplier):</p>
             <p className="font-headline text-xl text-primary">{formatTime(totalAdjustedTimeInMinutes)}</p>
           </div>
-           <div className="w-full">
+          <div className="w-full">
             <p className="text-sm text-muted-foreground">Fixed Costs:</p>
             <p className="font-headline text-xl text-primary">${fixedCostsDecimal.toFixed(2)}</p>
           </div>
@@ -399,7 +427,7 @@ export default function ProjectSettingsSection({
               ${totalProjectCost.toFixed(2)}
             </p>
           </div>
-          
+
           {timeByCategory.length > 0 && (
             <div className="w-full pt-3 mt-3 border-t border-border">
               <h4 className="font-headline text-lg flex items-center mb-2">

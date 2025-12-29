@@ -9,11 +9,13 @@
  * - GenerateProjectPlanOutput - The return type for the generateProjectPlan function.
  */
 
-import {ai} from '@/ai/genkit';
-import {z} from 'genkit';
+import { ai } from '@/ai/genkit';
+import { z } from 'genkit';
+import { googleAI } from '@genkit-ai/googleai';
 
 const GenerateProjectPlanInputSchema = z.object({
   prompt: z.string().describe('A prompt describing the software project.'),
+  apiKey: z.string().optional().describe('Optional Gemini API Key provided by the user.'),
 });
 export type GenerateProjectPlanInput = z.infer<typeof GenerateProjectPlanInputSchema>;
 
@@ -50,8 +52,9 @@ export async function generateProjectPlan(
 
 const projectPlanPrompt = ai.definePrompt({
   name: 'generateProjectPlanPrompt',
-  input: {schema: GenerateProjectPlanInputSchema},
-  output: {schema: GenerateProjectPlanOutputSchema},
+  model: googleAI.model('gemini-2.5-flash'),
+  input: { schema: GenerateProjectPlanInputSchema },
+  output: { schema: GenerateProjectPlanOutputSchema },
   prompt: `You are an expert software project manager and technical analyst.
 Based on the user's project description, you will perform two tasks:
 1.  Generate a comprehensive software requirements document. The document should be well-structured, detailing functional requirements (FR), non-functional requirements (NFR), security considerations (SEC), and deployment aspects. Use standard requirement IDs like FR1, NFR1, SEC1, etc.
@@ -73,10 +76,45 @@ const generateProjectPlanFlow = ai.defineFlow(
     inputSchema: GenerateProjectPlanInputSchema,
     outputSchema: GenerateProjectPlanOutputSchema,
   },
-  async input => {
-    const {output} = await projectPlanPrompt(input);
+  async (input) => {
+    let promptFn = projectPlanPrompt;
+
+    if (input.apiKey) {
+      console.log("Using custom API key for generateProjectPlan. Key length:", input.apiKey.length);
+
+      // Use generate directly to avoid prompt registration issues and for simplicity
+      const response = await ai.generate({
+        model: googleAI.model('gemini-2.5-flash'), 
+        prompt: `You are an expert software project manager and technical analyst.
+Based on the user's project description, you will perform two tasks:
+1.  Generate a comprehensive software requirements document. The document should be well-structured, detailing functional requirements (FR), non-functional requirements (NFR), security considerations (SEC), and deployment aspects. Use standard requirement IDs like FR1, NFR1, SEC1, etc.
+2.  Extract a list of modules and tasks directly from the generated requirements document.
+    *   Module names should correspond to major sections or distinct functionalities identified in the requirements (e.g., "FR1: User Authentication", "NFR2: Performance").
+    *   For each module, list specific, actionable tasks required to implement it.
+    *   For each task, provide an optimistic, a most likely, and a pessimistic time estimate **in hours**. The time unit for all tasks must be 'hours'.
+    *   Phrase task descriptions clearly.
+
+Project Description: ${input.prompt}
+
+Your output MUST be a JSON object matching the schema provided for the output. Ensure the time estimates are reasonable for software development tasks.
+`,
+        config: {
+          apiKey: input.apiKey, // Use a different API key for this request
+        },
+        output: { schema: GenerateProjectPlanOutputSchema },
+      });
+
+      if (!response) {
+        throw new Error("AI failed to generate project plan using custom key.");
+      }
+      return response.output!;
+    }
+
+    console.log("Using default API key/env var for generateProjectPlan");
+
+    const { output } = await promptFn(input);
     if (!output) {
-        throw new Error("AI failed to generate project plan.");
+      throw new Error("AI failed to generate project plan.");
     }
     return output;
   }

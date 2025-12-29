@@ -6,24 +6,27 @@ import { useState } from 'react';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Lightbulb, Loader2 } from 'lucide-react';
+import { Lightbulb, Loader2, KeyRound } from 'lucide-react';
 import { generateProjectPlan, type GenerateProjectPlanOutput } from '@/ai/flows/generate-project-plan';
 import { useToast } from '@/hooks/use-toast';
 import type { Module, Task, TimeUnit } from '@/types';
 import { calculateWeightedAverage } from '@/lib/timeUtils';
+import { Badge } from "@/components/ui/badge";
 
 interface RequirementsSectionProps {
   requirementsDocument: string;
   setRequirementsDocument: (doc: string) => void;
   setModules: React.Dispatch<React.SetStateAction<Module[]>>;
+  apiKey: string;
 }
 
-export default function RequirementsSection({ requirementsDocument, setRequirementsDocument, setModules }: RequirementsSectionProps) {
+export default function RequirementsSection({ requirementsDocument, setRequirementsDocument, setModules, apiKey }: Readonly<RequirementsSectionProps>) {
   const [prompt, setPrompt] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const { toast } = useToast();
 
   const handleGenerateProjectPlan = async () => {
+    console.log("Generating project plan. API Key present:", !!apiKey);
     if (!prompt.trim()) {
       toast({
         title: "Prompt is empty",
@@ -34,7 +37,10 @@ export default function RequirementsSection({ requirementsDocument, setRequireme
     }
     setIsLoading(true);
     try {
-      const result: GenerateProjectPlanOutput = await generateProjectPlan({ prompt });
+      const result: GenerateProjectPlanOutput = await generateProjectPlan({
+        prompt,
+        apiKey: apiKey || undefined
+      });
       setRequirementsDocument(result.requirementDocument);
 
       const newModules: Module[] = result.modules.map(aiModule => {
@@ -43,7 +49,7 @@ export default function RequirementsSection({ requirementsDocument, setRequireme
           const optimisticTime = Number(aiTask.optimisticTime);
           const mostLikelyTime = Number(aiTask.mostLikelyTime);
           const pessimisticTime = Number(aiTask.pessimisticTime);
-      
+
           const weightedAverageDecimal = calculateWeightedAverage(
             optimisticTime,
             mostLikelyTime,
@@ -79,7 +85,7 @@ export default function RequirementsSection({ requirementsDocument, setRequireme
         description: "Failed to generate project plan. Please try again.",
         variant: "destructive",
       });
-      setRequirementsDocument(''); 
+      setRequirementsDocument('');
       setModules([]); // Clear modules on error
     } finally {
       setIsLoading(false);
@@ -89,13 +95,26 @@ export default function RequirementsSection({ requirementsDocument, setRequireme
   return (
     <Card className="shadow-lg">
       <CardHeader>
-        <CardTitle className="font-headline text-2xl flex items-center">
-          <Lightbulb className="mr-2 h-6 w-6 text-primary" />
-          AI-Powered Project Plan Generation
-        </CardTitle>
-        <CardDescription>
-          Describe your software project, and our AI will generate a requirements document and initial modules/tasks.
-        </CardDescription>
+        <div className="flex justify-between items-start">
+          <div>
+            <CardTitle className="font-headline text-2xl flex items-center">
+              <Lightbulb className="mr-2 h-6 w-6 text-primary" />
+              AI-Powered Project Plan Generation
+            </CardTitle>
+            <CardDescription>
+              Describe your software project, and our AI will generate a requirements document and initial modules/tasks.
+            </CardDescription>
+          </div>
+          {apiKey ? (
+            <Badge variant="outline" className="flex items-center gap-1 text-green-600 border-green-200 bg-green-50">
+              <KeyRound className="h-3 w-3" /> Custom Key Active
+            </Badge>
+          ) : (
+            <Badge variant="outline" className="flex items-center gap-1 text-muted-foreground border-border bg-muted/50">
+              No Custom Key
+            </Badge>
+          )}
+        </div>
       </CardHeader>
       <CardContent className="space-y-6">
         <div className="space-y-2">
@@ -111,8 +130,8 @@ export default function RequirementsSection({ requirementsDocument, setRequireme
             aria-label="Project Description Prompt"
           />
         </div>
-        <Button 
-          onClick={handleGenerateProjectPlan} 
+        <Button
+          onClick={handleGenerateProjectPlan}
           disabled={isLoading}
           className="bg-primary hover:bg-primary/90 text-primary-foreground w-full sm:w-auto"
           aria-label="Generate Project Plan"

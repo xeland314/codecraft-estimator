@@ -10,11 +10,13 @@
  * - GenerateRequirementsOutput - The return type for the generateRequirements function.
  */
 
-import {ai} from '@/ai/genkit';
-import {z} from 'genkit';
+import { ai } from '@/ai/genkit';
+import { z } from 'genkit';
+import { googleAI } from '@genkit-ai/googleai';
 
 const GenerateRequirementsInputSchema = z.object({
   prompt: z.string().describe('A prompt describing the software project.'),
+  apiKey: z.string().optional().describe('Optional Gemini API Key provided by the user.'),
 });
 export type GenerateRequirementsInput = z.infer<typeof GenerateRequirementsInputSchema>;
 
@@ -33,8 +35,9 @@ export async function generateRequirements(
 
 const prompt = ai.definePrompt({
   name: 'generateRequirementsPrompt',
-  input: {schema: GenerateRequirementsInputSchema},
-  output: {schema: GenerateRequirementsOutputSchema},
+    model:   googleAI.model('gemini-2.5-flash'),
+  input: { schema: GenerateRequirementsInputSchema },
+  output: { schema: GenerateRequirementsOutputSchema },
   prompt: `You are an expert software project manager.
 
 You will generate a comprehensive software requirement document based on the user's prompt, incorporating best practices for functional and non-functional requirements, security, and deployment.
@@ -48,8 +51,27 @@ const generateRequirementsFlow = ai.defineFlow(
     inputSchema: GenerateRequirementsInputSchema,
     outputSchema: GenerateRequirementsOutputSchema,
   },
-  async input => {
-    const {output} = await prompt(input);
+  async (input) => {
+    if (input.apiKey) {
+      console.log("Using custom API key for generateRequirements");
+
+      const response = await ai.generate({
+        model: googleAI.model('gemini-2.5-flash'),
+        prompt: `You are an expert software project manager.
+
+You will generate a comprehensive software requirement document based on the user's prompt, incorporating best practices for functional and non-functional requirements, security, and deployment.
+
+Project Description: ${input.prompt}`,
+        config: {
+          apiKey: input.apiKey, // Use a different API key for this request
+        },
+        output: { schema: GenerateRequirementsOutputSchema },
+      });
+      return response.output!;
+    }
+
+    // Default path
+    const { output } = await prompt(input);
     return output!;
   }
 );
