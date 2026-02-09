@@ -1,6 +1,5 @@
 import { config } from 'dotenv';
 config();
 
-import '@/ai/flows/augment-tasks.ts';
-import '@/ai/flows/generate-project-plan.ts';
-import '@/ai/flows/suggest-risks.ts';
+// Genkit has been removed. Using Google AI JavaScript SDK (@google/generative-ai) instead.
+// No flow registration needed - flows are simple async functions.

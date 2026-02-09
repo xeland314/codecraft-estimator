@@ -89,8 +89,7 @@ Your output MUST be a valid JSON object matching this exact structure:
     const responseText = response.response.text();
 
     // Extract JSON from response
-    const jsonRegex = /\{[\s\S]*\}/;
-    const jsonMatch = jsonRegex.exec(responseText);
+    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
       console.error('No JSON found in response:', responseText);
       throw new Error('Failed to extract JSON from response');

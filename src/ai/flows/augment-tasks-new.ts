@@ -8,25 +8,17 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import { z } from 'zod';
 
 const AugmentTasksInputSchema = z.object({
-  moduleDescription: z
-    .string()
-    .describe('The description of the module to augment.'),
-  existingTasks: z
-    .string()
-    .describe('The existing tasks in the module, as a string.'),
+  moduleDescription: z.string().describe('The description of the module to augment.'),
+  existingTasks: z.string().describe('The existing tasks in the module, as a string.'),
   prompt: z.string().describe('A prompt to guide the addition of more tasks to the current module and adjust task times.'),
   apiKey: z.string().optional().describe('Optional Gemini API Key provided by the user.'),
 });
 export type AugmentTasksInput = z.infer<typeof AugmentTasksInputSchema>;
 
 const AugmentTasksOutputSchema = z.object({
-  augmentedTasks: z
-    .string()
-    .describe('The augmented tasks with adjusted time estimates.'),
+  augmentedTasks: z.string().describe('The augmented tasks with adjusted time estimates.'),
 });
 export type AugmentTasksOutput = z.infer<typeof AugmentTasksOutputSchema>;
-
-
 
 export async function augmentTasks(input: AugmentTasksInput): Promise<AugmentTasksOutput> {
   // Use provided API key or fall back to environment variable

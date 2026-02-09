@@ -18,7 +18,6 @@ const SuggestRisksOutputSchema = z.object({
 });
 export type SuggestRisksOutput = z.infer<typeof SuggestRisksOutputSchema>;
 
-
 export async function suggestRisks(input: SuggestRisksInput): Promise<SuggestRisksOutput> {
   if (!input.projectDescription || input.projectDescription.trim() === '') {
     return { suggestedRisks: [] };
@@ -64,8 +63,7 @@ ${input.projectDescription}`;
     const responseText = response.response.text();
     
     // Extract JSON from response
-    const jsonRegex = /\{[\s\S]*\}/;
-    const jsonMatch = jsonRegex.exec(responseText);
+    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
       console.error('No JSON found in response:', responseText);
       return { suggestedRisks: [] };

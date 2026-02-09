@@ -14,9 +14,7 @@ const GenerateRequirementsInputSchema = z.object({
 export type GenerateRequirementsInput = z.infer<typeof GenerateRequirementsInputSchema>;
 
 const GenerateRequirementsOutputSchema = z.object({
-  requirementDocument: z
-    .string()
-    .describe('A comprehensive software requirement document.'),
+  requirementDocument: z.string().describe('A comprehensive software requirement document.'),
 });
 export type GenerateRequirementsOutput = z.infer<typeof GenerateRequirementsOutputSchema>;
 
