@@ -7,9 +7,10 @@ import RequirementsSection from '@/components/RequirementsSection';
 import ModulesSection from '@/components/ModulesSection';
 import ProjectSettingsSection from '@/components/ProjectSettingsSection';
 import AnalyticsSection from '@/components/AnalyticsSection';
+import CriticalPathSection from '@/components/CriticalPathSection';
 import ProjectsDialog from '@/components/ProjectsDialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Lightbulb, LayoutGrid, Settings, AreaChart } from 'lucide-react';
+import { Lightbulb, LayoutGrid, Settings, AreaChart, GitBranch } from 'lucide-react';
 import type { Module, Risk, Project, ProjectData, Task, RiskLevel } from '@/types';
 import { Decimal } from 'decimal.js';
 import { useToast } from '@/hooks/use-toast';
@@ -354,6 +355,8 @@ export default function CodeCraftEstimatorPage() {
           timeUnit: t.timeUnit || 'hours',
           category: t.category || undefined,
           weightedAverageTimeInMinutes: new Decimal(t.weightedAverageTimeInMinutes || 0), // Store as string
+          ...(t.predecessorTaskIds && { predecessorTaskIds: t.predecessorTaskIds }),
+          ...(t.successorTaskIds && { successorTaskIds: t.successorTaskIds }),
         } as Task)),
       }));
 
@@ -437,6 +440,9 @@ export default function CodeCraftEstimatorPage() {
             <TabsTrigger value="analytics" className="py-3 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md">
               <AreaChart className="mr-2 h-5 w-5" /> Analytics
             </TabsTrigger>
+            <TabsTrigger value="critical-path" className="py-3 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md">
+              <GitBranch className="mr-2 h-5 w-5" /> Critical Path
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="requirements">
@@ -474,6 +480,13 @@ export default function CodeCraftEstimatorPage() {
               modules={modules}
               risks={risks}
               effortMultiplier={effortMultiplier}
+            />
+          </TabsContent>
+          <TabsContent value="critical-path">
+            <CriticalPathSection
+              modules={modules}
+              setModules={setModules}
+              apiKey={apiKey}
             />
           </TabsContent>
         </Tabs>

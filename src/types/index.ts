@@ -29,6 +29,8 @@ export interface Task {
   timeUnit: TimeUnit;
   weightedAverageTimeInMinutes: Decimal;
   category?: TaskCategory;
+  predecessorTaskIds?: string[]; // IDs of tasks that must be completed before this one
+  successorTaskIds?: string[]; // IDs of tasks that depend on this one
 }
 
 export interface Module {
@@ -91,4 +93,21 @@ export interface SuggestRisksInput {
 
 export interface SuggestRisksOutput {
   suggestedRisks: string[];
+}
+
+// Critical Path Analysis Types
+export interface TaskSchedule {
+  taskId: string;
+  earliestStart: Decimal; // in minutes
+  earliestFinish: Decimal; // in minutes
+  latestStart: Decimal; // in minutes
+  latestFinish: Decimal; // in minutes
+  slack: Decimal; // latestStart - earliestStart
+  onCriticalPath: boolean;
+}
+
+export interface CriticalPathAnalysis {
+  projectDuration: Decimal; // in minutes
+  tasks: TaskSchedule[];
+  criticalPathTaskIds: string[];
 }
