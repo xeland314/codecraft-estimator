@@ -2,25 +2,27 @@
 "use client";
 
 import type * as React from 'react';
-import { useMemo } from 'react';
-import type { Module, Risk, Task, RiskLevel, TaskCategory } from '@/types';
-import { riskLevelToNumber, TASK_CATEGORIES } from '@/types';
+import { useMemo, useState } from 'react';
+import type { Module, Risk } from '@/types';
+import { riskLevelToNumber } from '@/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { BarChart, CartesianGrid, XAxis, YAxis, ZAxis, Bar, Tooltip, Legend, ResponsiveContainer, LegendProps, TooltipProps, ScatterChart, Scatter, PieChart, Pie, Cell } from 'recharts';
-import { ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from "@/components/ui/chart"
+import { BarChart, CartesianGrid, XAxis, YAxis, Bar, LegendProps, TooltipProps, PieChart, Pie, Cell } from 'recharts';
+import { ChartConfig, ChartContainer, ChartTooltip, ChartLegend } from "@/components/ui/chart"
 import { Decimal } from 'decimal.js';
 import { convertToMinutes, formatTime } from '@/lib/timeUtils';
-import { AreaChart, BarChartHorizontalBig, PieChartIcon, AlertTriangleIcon, Layers } from 'lucide-react';
+import { AreaChart, BarChartHorizontalBig, PieChartIcon, AlertTriangleIcon, Layers, ArrowUpDown } from 'lucide-react';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
 
 interface AnalyticsSectionProps {
-  modules: Module[];
-  risks: Risk[];
-  effortMultiplier: number;
+  readonly modules: Module[];
+  readonly risks: Risk[];
+  readonly effortMultiplier: number;
 }
 
 // Custom Tooltip Content for Recharts
 const CustomTooltipContent = ({ active, payload, label, contentStyle, itemStyle, labelStyle }: TooltipProps<number, string>) => {
-  if (active && payload && payload.length) {
+  if (active && payload?.length) {
     // Specific for Scatter (Risk) Chart
     if (payload[0].payload?.description && payload[0].payload?.riskTimeInMinutes !== undefined) {
         const riskData = payload[0].payload;
@@ -67,8 +69,8 @@ const CustomLegendContent = (props: LegendProps) => {
   const { payload } = props;
   return (
     <ul className="flex justify-center flex-wrap gap-x-4 gap-y-1 text-sm mt-2">
-      {payload?.map((entry, index) => (
-        <li key={`item-${index}`} style={{ color: entry.color }} className="flex items-center">
+      {payload?.map((entry) => (
+        <li key={String(entry.value)} style={{ color: entry.color }} className="flex items-center">
           <span style={{ backgroundColor: entry.color, width: '10px', height: '10px', marginRight: '5px', display: 'inline-block', borderRadius: entry.type === 'circle' ? '50%' : '0' }}></span>
           {entry.value}
         </li>
@@ -79,7 +81,7 @@ const CustomLegendContent = (props: LegendProps) => {
 
 
 export default function AnalyticsSection({ modules, risks, effortMultiplier }: AnalyticsSectionProps) {
-  
+  const [sortRisksBy, setSortRisksBy] = useState<'rpi' | 'probability' | 'impact' | 'time'>('rpi');
   const projectScenarioData = useMemo(() => {
     let optimisticTaskTime = new Decimal(0);
     let realisticTaskTime = new Decimal(0);
@@ -159,21 +161,91 @@ export default function AnalyticsSection({ modules, risks, effortMultiplier }: A
     return config;
   }, [projectCompositionData]);
 
-  const riskBubbleData = useMemo(() => {
-    return risks.map(risk => ({
-      probability: riskLevelToNumber(risk.probability),
-      impactSeverity: riskLevelToNumber(risk.impactSeverity),
-      riskTimeInMinutes: risk.riskTimeInMinutes,
-      description: risk.description,
-      probabilityLabel: risk.probability,
-      impactSeverityLabel: risk.impactSeverity,
-      fill: risk.impactSeverity === 'High' ? "hsl(var(--destructive))" : risk.impactSeverity === 'Medium' ? "hsl(var(--accent))" : "hsl(var(--chart-2))"
-    }));
-  }, [risks]);
 
-  const riskChartConfig = {
-    risks: { label: "Risks", color: "hsl(var(--chart-1))" }, // Generic, actual color per bubble
-  } satisfies ChartConfig;
+
+  // Risk Priority Index calculation and matrix data
+  const riskMatrixData = useMemo(() => {
+    const riskDataWithRPI = risks.map((risk, idx) => {
+      const probValue = riskLevelToNumber(risk.probability);
+      const impactValue = riskLevelToNumber(risk.impactSeverity);
+      const timeUrgencyFactor = Math.min(1, risk.riskTimeInMinutes / 480); // Normalize by 8 hours
+      const rpi = probValue * impactValue * Math.max(0.5, timeUrgencyFactor); // RPI with time weighting
+      
+      return {
+        id: idx,
+        description: risk.description,
+        probability: risk.probability,
+        probValue,
+        impactSeverity: risk.impactSeverity,
+        impactValue,
+        riskTimeInMinutes: risk.riskTimeInMinutes,
+        rpi: Number(rpi.toFixed(2))
+      };
+    });
+
+    // Sort based on selected criteria
+    const sortedData = [...riskDataWithRPI].sort((a, b) => {
+      switch (sortRisksBy) {
+        case 'rpi':
+          return b.rpi - a.rpi;
+        case 'probability':
+          return b.probValue - a.probValue;
+        case 'impact':
+          return b.impactValue - a.impactValue;
+        case 'time':
+          return b.riskTimeInMinutes - a.riskTimeInMinutes;
+        default:
+          return 0;
+      }
+    });
+
+    // Create matrix: risk levels as keys
+    const matrix: Record<string, Record<string, typeof riskDataWithRPI>> = {
+      'High': { 'High': [], 'Medium': [], 'Low': [] },
+      'Medium': { 'High': [], 'Medium': [], 'Low': [] },
+      'Low': { 'High': [], 'Medium': [], 'Low': [] }
+    };
+
+    riskDataWithRPI.forEach(risk => {
+      matrix[risk.probability][risk.impactSeverity].push(risk);
+    });
+
+    return { riskDataWithRPI, sortedData, matrix };
+  }, [risks, sortRisksBy]);
+
+  const getRPIColor = (rpi: number): string => {
+    if (rpi >= 6) return "hsl(var(--destructive))"; // Critical: Red
+    if (rpi >= 4) return "hsl(var(--accent))"; // High: Orange
+    if (rpi >= 2) return "hsl(120, 84%, 60%)"; // Medium: Yellow-green
+    return "hsl(120, 73%, 75%)"; // Low: Green
+  };
+
+  const getSortButtonLabel = (sortBy: 'rpi' | 'probability' | 'impact' | 'time'): string => {
+    switch (sortBy) {
+      case 'rpi':
+        return 'Risk Priority Index';
+      case 'probability':
+        return 'Probability';
+      case 'impact':
+        return 'Impact';
+      case 'time':
+        return 'Time Impact';
+      default:
+        return '';
+    }
+  };
+
+  const renderPieChartLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent, name }: any): React.ReactNode => {
+    const RADIAN = Math.PI / 180;
+    const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
+    const x = cx + radius * Math.cos(-midAngle * RADIAN);
+    const y = cy + radius * Math.sin(-midAngle * RADIAN);
+    return (percent * 100) > 5 ? (
+      <text x={x} y={y} fill="white" textAnchor={x > cx ? 'start' : 'end'} dominantBaseline="central" fontSize="12px">
+        {`${name} (${(percent * 100).toFixed(0)}%)`}
+      </text>
+    ) : null;
+  };
 
   const categoryTimeData = useMemo(() => {
     const categoryMap: { [key: string]: Decimal } = {};
@@ -313,20 +385,10 @@ export default function AnalyticsSection({ modules, risks, effortMultiplier }: A
                         cy="50%" 
                         outerRadius="80%" 
                         labelLine={false}
-                        label={({ cx, cy, midAngle, innerRadius, outerRadius, percent, index, name }) => {
-                            const RADIAN = Math.PI / 180;
-                            const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
-                            const x = cx + radius * Math.cos(-midAngle * RADIAN);
-                            const y = cy + radius * Math.sin(-midAngle * RADIAN);
-                            return (percent * 100) > 5 ? ( // Only show label if slice is > 5%
-                                <text x={x} y={y} fill="white" textAnchor={x > cx ? 'start' : 'end'} dominantBaseline="central" fontSize="12px">
-                                {`${name} (${(percent * 100).toFixed(0)}%)`}
-                                </text>
-                            ) : null;
-                        }}
+                        label={renderPieChartLabel}
                     >
-                       {categoryTimeData.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={entry.fill} />
+                       {categoryTimeData.map((entry) => (
+                            <Cell key={entry.name} fill={entry.fill} />
                         ))}
                     </Pie>
                     <ChartLegend content={<CustomLegendContent />} />
@@ -339,42 +401,144 @@ export default function AnalyticsSection({ modules, risks, effortMultiplier }: A
       )}
 
       {risks.length > 0 && (
-         <Card className="shadow-lg">
-          <CardHeader>
-            <CardTitle className="font-headline text-xl flex items-center">
-              <AlertTriangleIcon className="mr-2 h-5 w-5 text-primary" />
-              Risk Analysis (Bubble Chart)
-            </CardTitle>
-            <CardDescription>Visualizing risks by probability, impact severity, and time impact (bubble size).</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ChartContainer config={riskChartConfig} className="min-h-[350px] w-full aspect-video">
-              <ScatterChart margin={{ top: 20, right: 30, bottom: 20, left: 20 }}>
-                <CartesianGrid />
-                <XAxis 
-                    type="number" 
-                    dataKey="probability" 
-                    name="Probability" 
-                    domain={[0.5, 3.5]} 
-                    ticks={[1,2,3]} 
-                    tickFormatter={(value) => ['Low', 'Medium', 'High'][value-1]} 
-                />
-                <YAxis 
-                    type="number" 
-                    dataKey="impactSeverity" 
-                    name="Impact Severity" 
-                    domain={[0.5, 3.5]} 
-                    ticks={[1,2,3]} 
-                    tickFormatter={(value) => ['Low', 'Medium', 'High'][value-1]}
-                />
-                <ZAxis type="number" dataKey="riskTimeInMinutes" range={[100, 1000]} name="Time Impact (minutes)" />
-                <ChartTooltip content={<CustomTooltipContent />} cursor={{ strokeDasharray: '3 3' }}/>
-                <Legend content={<CustomLegendContent />} payload={[{ value: 'Low Impact', type: 'circle', id: 'ID01', color: 'hsl(var(--chart-2))' }, { value: 'Medium Impact', type: 'circle', id: 'ID02', color: 'hsl(var(--accent))' }, { value: 'High Impact', type: 'circle', id: 'ID03', color: 'hsl(var(--destructive))' }]}/>
-                <Scatter name="Risks" data={riskBubbleData} shape="circle" />
-              </ScatterChart>
-            </ChartContainer>
-          </CardContent>
-        </Card>
+        <>
+          <Card className="shadow-lg">
+            <CardHeader>
+              <CardTitle className="font-headline text-xl flex items-center">
+                <AlertTriangleIcon className="mr-2 h-5 w-5 text-primary" />
+                Risk Matrix (Probability × Impact)
+              </CardTitle>
+              <CardDescription>Traditional risk matrix showing risks by probability and impact severity. Cell colors indicate Risk Priority Index (RPI).</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse text-sm">
+                  <thead>
+                    <tr>
+                      <th className="border border-border p-2 bg-muted text-left font-semibold">Probability →</th>
+                      <th className="border border-border p-2 bg-muted text-center font-semibold" style={{color: 'hsl(var(--destructive))'}}>High Impact</th>
+                      <th className="border border-border p-2 bg-muted text-center font-semibold" style={{color: 'hsl(var(--accent))'}}>Medium Impact</th>
+                      <th className="border border-border p-2 bg-muted text-center font-semibold" style={{color: 'hsl(120, 73%, 75%)'}}>Low Impact</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {['High', 'Medium', 'Low'].map((probLevel) => (
+                      <tr key={probLevel}>
+                        <td className="border border-border p-2 bg-muted font-semibold">{probLevel}</td>
+                        {['High', 'Medium', 'Low'].map((impactLevel) => {
+                          const cellRisks = riskMatrixData.matrix[probLevel][impactLevel];
+                          const avgRPI = cellRisks.length > 0 
+                            ? cellRisks.reduce((sum, r) => sum + r.rpi, 0) / cellRisks.length 
+                            : 0;
+                          const cellColor = getRPIColor(avgRPI);
+                          
+                          return (
+                            <td 
+                              key={`${probLevel}-${impactLevel}`}
+                              className="border border-border p-3 text-white align-top"
+                              style={{ backgroundColor: cellColor, minHeight: '100px' }}
+                            >
+                              <div className="space-y-1">
+                                {cellRisks.map((risk) => (
+                                  <div key={risk.id} className="text-xs font-medium truncate" title={risk.description}>
+                                    {risk.description.length > 20 ? risk.description.substring(0, 17) + '...' : risk.description}
+                                  </div>
+                                ))}
+                              </div>
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="mt-4 flex gap-4 flex-wrap text-sm">
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 rounded" style={{backgroundColor: 'hsl(var(--destructive))'}}></div>
+                  <span>Critical (RPI ≥ 6)</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 rounded" style={{backgroundColor: 'hsl(var(--accent))'}}></div>
+                  <span>High (RPI 4-6)</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 rounded" style={{backgroundColor: 'hsl(120, 84%, 60%)'}}></div>
+                  <span>Medium (RPI 2-4)</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 rounded" style={{backgroundColor: 'hsl(120, 73%, 75%)'}}></div>
+                  <span>Low (RPI &lt; 2)</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="shadow-lg">
+            <CardHeader>
+              <CardTitle className="font-headline text-xl flex items-center">
+                <AlertTriangleIcon className="mr-2 h-5 w-5 text-primary" />
+                Risk Priority Index (RPI) Analysis
+              </CardTitle>
+              <CardDescription>Detailed risk breakdown sorted by Risk Priority Index (Probability × Impact × Urgency).</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex gap-2 mb-4 flex-wrap">
+                {(['rpi', 'probability', 'impact', 'time'] as const).map(sortBy => (
+                  <button
+                    key={sortBy}
+                    onClick={() => setSortRisksBy(sortBy)}
+                    className={`px-3 py-1 rounded text-sm font-medium flex items-center gap-1 transition-colors ${
+                      sortRisksBy === sortBy
+                        ? 'bg-primary text-primary-foreground'
+                        : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                    }`}
+                  >
+                    <ArrowUpDown className="h-3 w-3" />
+                    {getSortButtonLabel(sortBy)}
+                  </button>
+                ))}
+              </div>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="font-semibold">Risk Description</TableHead>
+                      <TableHead className="text-center font-semibold">RPI</TableHead>
+                      <TableHead className="text-center font-semibold">Probability</TableHead>
+                      <TableHead className="text-center font-semibold">Impact</TableHead>
+                      <TableHead className="text-right font-semibold">Time Impact</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {riskMatrixData.sortedData.map((risk) => (
+                      <TableRow key={risk.id} className="hover:bg-muted/50">
+                        <TableCell className="font-medium">{risk.description}</TableCell>
+                        <TableCell className="text-center">
+                          <Badge 
+                            className="font-bold" 
+                            style={{
+                              backgroundColor: getRPIColor(risk.rpi),
+                              color: 'white',
+                              border: 'none'
+                            }}
+                          >
+                            {risk.rpi}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-center">{risk.probability}</TableCell>
+                        <TableCell className="text-center">{risk.impactSeverity}</TableCell>
+                        <TableCell className="text-right text-muted-foreground">
+                          {formatTime(new Decimal(risk.riskTimeInMinutes))}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        </>
       )}
     </div>
   );
