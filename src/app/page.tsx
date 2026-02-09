@@ -8,9 +8,10 @@ import ModulesSection from '@/components/ModulesSection';
 import ProjectSettingsSection from '@/components/ProjectSettingsSection';
 import AnalyticsSection from '@/components/AnalyticsSection';
 import CriticalPathSection from '@/components/CriticalPathSection';
+import TaskProgressSection from '@/components/TaskProgressSection';
 import ProjectsDialog from '@/components/ProjectsDialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Lightbulb, LayoutGrid, Settings, AreaChart, GitBranch } from 'lucide-react';
+import { Lightbulb, LayoutGrid, Settings, AreaChart, GitBranch, CheckSquare } from 'lucide-react';
 import type { Module, Risk, Project, ProjectData, Task, RiskLevel } from '@/types';
 import { Decimal } from 'decimal.js';
 import { useToast } from '@/hooks/use-toast';
@@ -136,6 +137,10 @@ export default function CodeCraftEstimatorPage() {
           } else if (typeof task.weightedAverageTimeInMinutes === 'number') {
             task.weightedAverageTimeInMinutes = new Decimal(task.weightedAverageTimeInMinutes);
           }
+          // Ensure status field exists
+          if (!task.status) {
+            task.status = 'pending';
+          }
         });
       });
       setModules(parsedModules);
@@ -185,11 +190,12 @@ export default function CodeCraftEstimatorPage() {
 
   const loadProjectDataIntoState = (projectData: ProjectData) => {
     setRequirementsDocument(projectData.requirementsDocument);
-    // Ensure weightedAverageTimeInMinutes is Decimal
+    // Ensure weightedAverageTimeInMinutes is Decimal and status is set
     setModules(projectData.modules.map(m => ({
       ...m,
       tasks: m.tasks.map(t => ({
         ...t,
+        status: t.status || 'pending',
         weightedAverageTimeInMinutes: new Decimal(t.weightedAverageTimeInMinutes)
       }))
     })));
@@ -354,6 +360,7 @@ export default function CodeCraftEstimatorPage() {
           pessimisticTime: Number(t.pessimisticTime || 0),
           timeUnit: t.timeUnit || 'hours',
           category: t.category || undefined,
+          status: t.status || 'pending',
           weightedAverageTimeInMinutes: new Decimal(t.weightedAverageTimeInMinutes || 0), // Store as string
           ...(t.predecessorTaskIds && { predecessorTaskIds: t.predecessorTaskIds }),
           ...(t.successorTaskIds && { successorTaskIds: t.successorTaskIds }),
@@ -443,6 +450,9 @@ export default function CodeCraftEstimatorPage() {
             <TabsTrigger value="critical-path" className="py-3 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md">
               <GitBranch className="mr-2 h-5 w-5" /> Critical Path
             </TabsTrigger>
+            <TabsTrigger value="progress" className="py-3 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md">
+              <CheckSquare className="mr-2 h-5 w-5" /> Progress
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="requirements">
@@ -487,6 +497,12 @@ export default function CodeCraftEstimatorPage() {
               modules={modules}
               setModules={setModules}
               apiKey={apiKey}
+            />
+          </TabsContent>
+          <TabsContent value="progress">
+            <TaskProgressSection
+              modules={modules}
+              setModules={setModules}
             />
           </TabsContent>
         </Tabs>

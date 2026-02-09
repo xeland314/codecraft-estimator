@@ -92,6 +92,7 @@ export default function ModulesSection({ modules, setModules, apiKey }: ModulesS
       pessimisticTime: currentNewTask.pessimisticTime,
       timeUnit: currentNewTask.timeUnit,
       category: currentNewTask.category || undefined,
+      status: 'pending',
       weightedAverageTimeInMinutes,
     };
 
@@ -183,6 +184,7 @@ export default function ModulesSection({ modules, setModules, apiKey }: ModulesS
             pessimisticTime: data.pessimisticTime,
             timeUnit: 'hours' as TimeUnit,
             category: data.category,
+            status: 'pending' as const,
             weightedAverageTimeInMinutes,
           };
         });

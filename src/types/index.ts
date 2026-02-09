@@ -19,6 +19,7 @@ export const TASK_CATEGORIES = [
 
 export type TaskCategory = typeof TASK_CATEGORIES[number];
 
+export type TaskStatus = 'pending' | 'in-progress' | 'completed';
 
 export interface Task {
   id: string;
@@ -29,6 +30,7 @@ export interface Task {
   timeUnit: TimeUnit;
   weightedAverageTimeInMinutes: Decimal;
   category?: TaskCategory;
+  status: TaskStatus; // Task completion status
   predecessorTaskIds?: string[]; // IDs of tasks that must be completed before this one
   successorTaskIds?: string[]; // IDs of tasks that depend on this one
 }
