@@ -59,6 +59,7 @@ export default function RequirementsSection({ requirementsDocument, setRequireme
           return {
             id: crypto.randomUUID(),
             description: aiTask.description,
+            category: aiTask.category,
             optimisticTime: optimisticTime,
             mostLikelyTime: mostLikelyTime,
             pessimisticTime: pessimisticTime,

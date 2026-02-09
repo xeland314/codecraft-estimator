@@ -10,6 +10,20 @@ import { z } from 'zod';
 
 const TaskSchema = z.object({
   description: z.string().describe('Task description (e.g., Design user registration UI)'),
+  category: z.enum([
+    'Design',
+    'Development (Frontend)',
+    'Development (Backend)',
+    'API Development',
+    'Database',
+    'Testing/QA',
+    'Deployment',
+    'Management',
+    'Documentation',
+    'Research',
+    'Communication',
+    'Other',
+  ]).describe('Category of the task'),
   optimisticTime: z.number().describe('Optimistic time estimate in hours.'),
   mostLikelyTime: z.number().describe('Most likely time estimate in hours.'),
   pessimisticTime: z.number().describe('Pessimistic time estimate in hours.'),
@@ -48,6 +62,7 @@ Based on the user's project description, you will perform two tasks:
 2. Extract a list of modules and tasks directly from the generated requirements document.
    - Module names should correspond to major sections or distinct functionalities identified in the requirements (e.g., "FR1: User Authentication", "NFR2: Performance").
    - For each module, list specific, actionable tasks required to implement it.
+   - For each task, assign ONE of these categories: Design, Development (Frontend), Development (Backend), API Development, Database, Testing/QA, Deployment, Management, Documentation, Research, Communication, or Other.
    - For each task, provide an optimistic, a most likely, and a pessimistic time estimate **in hours**. The time unit for all tasks must be 'hours'.
    - Phrase task descriptions clearly.
 
@@ -60,6 +75,7 @@ Your output MUST be a valid JSON object matching this exact structure:
       "tasks": [
         {
           "description": "Design login UI",
+          "category": "Design",
           "optimisticTime": 4,
           "mostLikelyTime": 6,
           "pessimisticTime": 10

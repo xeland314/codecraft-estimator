@@ -22,28 +22,6 @@ interface ModulesSectionProps {
   apiKey: string;
 }
 
-// Helper to parse augmented tasks string
-// Expected format: "Task Description | Optimistic Time | Most Likely Time | Pessimistic Time | Unit (minutes/hours/days)"
-// Each task on a new line.
-const parseAugmentedTasks = (tasksString: string): Partial<Task>[] => {
-  if (!tasksString) return [];
-  return tasksString.split('\n').map(line => {
-    const parts = line.split('|').map(part => part.trim());
-    if (parts.length === 5) {
-      const description = parts[0];
-      const optimisticTime = parseFloat(parts[1]);
-      const mostLikelyTime = parseFloat(parts[2]);
-      const pessimisticTime = parseFloat(parts[3]);
-      const timeUnit = parts[4].toLowerCase() as TimeUnit;
-
-      if (description && !isNaN(optimisticTime) && !isNaN(mostLikelyTime) && !isNaN(pessimisticTime) && ['minutes', 'hours', 'days'].includes(timeUnit)) {
-        return { description, optimisticTime, mostLikelyTime, pessimisticTime, timeUnit };
-      }
-    }
-    return null;
-  }).filter(task => task !== null) as Partial<Task>[];
-};
-
 
 export default function ModulesSection({ modules, setModules, apiKey }: ModulesSectionProps) {
   const [newModuleName, setNewModuleName] = useState('');
@@ -179,44 +157,39 @@ export default function ModulesSection({ modules, setModules, apiKey }: ModulesS
     setIsAugmenting(prev => ({ ...prev, [moduleId]: true }));
 
     const existingTasksString = module.tasks.map(t =>
-      `${t.description} | ${t.optimisticTime} | ${t.mostLikelyTime} | ${t.pessimisticTime} | ${t.timeUnit}`
+      `- ${t.description} (${t.category || 'Other'}) | ${t.optimisticTime}-${t.mostLikelyTime}-${t.pessimisticTime} ${t.timeUnit}`
     ).join('\n');
-
-    const augmentationPrompt = `${currentAiTaskPrompt}. Ensure each new task is on a new line and follows this format: 'TASK_DESCRIPTION | OPTIMISTIC_TIME | MOST_LIKELY_TIME | PESSIMISTIC_TIME | TIME_UNIT (minutes/hours/days)'. Adjust existing task times if necessary based on your reasoning by re-listing them in the same format. Do not assign categories.`;
 
     try {
       const result: AugmentTasksOutput = await augmentTasks({
         moduleDescription: module.name,
         existingTasks: existingTasksString,
-        prompt: augmentationPrompt,
+        prompt: currentAiTaskPrompt,
         apiKey: apiKey || undefined
       });
 
-      const augmentedTaskData = parseAugmentedTasks(result.augmentedTasks);
-      if (augmentedTaskData.length === 0 && result.augmentedTasks.trim() !== "") {
-        toast({ title: "AI Augmentation", description: "AI returned tasks in an unparseable format. Raw: " + result.augmentedTasks, variant: "destructive", duration: 10000 });
-      } else if (augmentedTaskData.length > 0) {
-        const newTasks: Task[] = augmentedTaskData.map(data => {
+      if (result.augmentedTasks.length === 0) {
+        toast({ title: "No Tasks Generated", description: "AI did not suggest new tasks or adjustments." });
+      } else {
+        const newTasks: Task[] = result.augmentedTasks.map(data => {
           const weightedAverageTimeInMinutes = calculateWeightedAverage(
-            data.optimisticTime!, data.mostLikelyTime!, data.pessimisticTime!, data.timeUnit!
+            data.optimisticTime, data.mostLikelyTime, data.pessimisticTime, 'hours'
           );
           return {
             id: crypto.randomUUID(),
-            description: data.description!,
-            optimisticTime: data.optimisticTime!,
-            mostLikelyTime: data.mostLikelyTime!,
-            pessimisticTime: data.pessimisticTime!,
-            timeUnit: data.timeUnit!,
-            // Categories are not assigned by AI for now
+            description: data.description,
+            optimisticTime: data.optimisticTime,
+            mostLikelyTime: data.mostLikelyTime,
+            pessimisticTime: data.pessimisticTime,
+            timeUnit: 'hours' as TimeUnit,
+            category: data.category,
             weightedAverageTimeInMinutes,
           };
         });
 
-        setModules(prev => prev.map(m => m.id === moduleId ? { ...m, tasks: [...newTasks] } : m)); // Replaces tasks with AI output
-        toast({ title: "Tasks Augmented", description: "Tasks have been updated by AI. Review the changes and assign categories manually if needed." });
+        setModules(prev => prev.map(m => m.id === moduleId ? { ...m, tasks: [...newTasks] } : m));
+        toast({ title: "Tasks Augmented", description: "Tasks have been updated by AI with categories assigned automatically." });
         setAiTaskPrompt(prev => ({ ...prev, [moduleId]: '' }));
-      } else {
-        toast({ title: "No Tasks Generated", description: "AI did not suggest new tasks or adjustments." });
       }
 
     } catch (error) {
