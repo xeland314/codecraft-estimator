@@ -1,8 +1,9 @@
 "use client";
 
 import type React from 'react';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import type { Module, TaskStatus } from '@/types';
+import { TASK_CATEGORIES } from '@/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
@@ -17,6 +18,29 @@ interface TaskProgressSectionProps {
 }
 
 export default function TaskProgressSection({ modules, setModules }: TaskProgressSectionProps) {
+  const [search, setSearch] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState<string>('All');
+  const [statusFilter, setStatusFilter] = useState<string>('All');
+
+  const filteredModules = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return modules
+      .map(m => ({
+        ...m,
+        tasks: m.tasks.filter(t => {
+          if (categoryFilter !== 'All' && t.category !== categoryFilter) return false;
+          if (statusFilter !== 'All' && t.status !== statusFilter) return false;
+          if (!q) return true;
+          return (
+            t.description.toLowerCase().includes(q) ||
+            (t.category || '').toLowerCase().includes(q) ||
+            m.name.toLowerCase().includes(q)
+          );
+        })
+      }))
+      .filter(m => m.tasks.length > 0);
+  }, [modules, search, categoryFilter, statusFilter]);
+
   const progressStats = useMemo(() => {
     let totalTasks = 0;
     let completedTasks = 0;
@@ -25,7 +49,7 @@ export default function TaskProgressSection({ modules, setModules }: TaskProgres
     let inProgressTime = new Decimal(0);
     let pendingTime = new Decimal(0);
 
-    const moduleStats = modules.map(module => {
+    const moduleStats = filteredModules.map(module => {
       let moduleTotalTasks = 0;
       let moduleCompletedTasks = 0;
       let moduleInProgressTasks = 0;
@@ -55,18 +79,18 @@ export default function TaskProgressSection({ modules, setModules }: TaskProgres
         }
       });
 
-      return {
-        moduleId: module.id,
-        moduleName: module.name,
-        totalTasks: moduleTotalTasks,
-        completed: moduleCompletedTasks,
-        inProgress: moduleInProgressTasks,
-        pending: modulePendingTasks,
-        completedTime: moduleCompletedTime,
-        inProgressTime: moduleInProgressTime,
-        pendingTime: modulePendingTime,
-        completionPercentage: moduleTotalTasks > 0 ? Math.round((moduleCompletedTasks / moduleTotalTasks) * 100) : 0,
-      };
+        return {
+          moduleId: module.id,
+          moduleName: module.name,
+          totalTasks: moduleTotalTasks,
+          completed: moduleCompletedTasks,
+          inProgress: moduleInProgressTasks,
+          pending: modulePendingTasks,
+          completedTime: moduleCompletedTime,
+          inProgressTime: moduleInProgressTime,
+          pendingTime: modulePendingTime,
+          completionPercentage: moduleTotalTasks > 0 ? Math.round((moduleCompletedTasks / moduleTotalTasks) * 100) : 0,
+        };
     });
 
     const projectCompletionPercentage = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
@@ -82,7 +106,7 @@ export default function TaskProgressSection({ modules, setModules }: TaskProgres
       projectCompletionPercentage,
       moduleStats,
     };
-  }, [modules]);
+  }, [filteredModules]);
 
   const handleToggleTaskStatus = (moduleId: string, taskId: string) => {
     setModules(
@@ -216,24 +240,55 @@ export default function TaskProgressSection({ modules, setModules }: TaskProgres
           <CardDescription>View and manage task completion status for each module.</CardDescription>
         </CardHeader>
         <CardContent>
-          <Tabs defaultValue={modules[0]?.id} className="w-full">
-            <TabsList className="h-full w-full flex flex-wrap gap-2 overflow-x-auto py-1">
-              {progressStats.moduleStats.map(stat => (
-                <TabsTrigger
-                  key={stat.moduleId}
-                  value={stat.moduleId}
-                  className="text-xs sm:text-sm flex-none min-w-[120px] max-w-[220px]"
-                >
-                  <div className="text-center min-w-0">
-                    <div className="font-semibold">{stat.completionPercentage}%</div>
-                    <div className="text-xs text-muted-foreground truncate">{stat.moduleName}</div>
-                  </div>
-                </TabsTrigger>
-              ))}
-            </TabsList>
+          <div className="space-y-4">
+            <div className="flex gap-2 items-center">
+              <input
+                aria-label="Buscar tareas"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Buscar descripción, módulo o categoría..."
+                className="input input-sm flex-1 px-2 py-1 border rounded"
+              />
+              <select
+                value={categoryFilter}
+                onChange={e => setCategoryFilter(e.target.value)}
+                className="input input-sm px-2 py-1 border rounded"
+              >
+                <option value="All">Todas las categorías</option>
+                {TASK_CATEGORIES.map(c => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+              <select
+                value={statusFilter}
+                onChange={e => setStatusFilter(e.target.value)}
+                className="input input-sm px-2 py-1 border rounded"
+              >
+                <option value="All">Todos los estados</option>
+                <option value="pending">Pending</option>
+                <option value="in-progress">In-Progress</option>
+                <option value="completed">Completed</option>
+              </select>
+            </div>
 
-            {progressStats.moduleStats.map(moduleStat => (
-              <TabsContent key={moduleStat.moduleId} value={moduleStat.moduleId} className="space-y-4 mt-4">
+            <Tabs defaultValue={progressStats.moduleStats[0]?.moduleId || modules[0]?.id} className="w-full">
+              <TabsList className="h-full w-full flex flex-wrap gap-2 overflow-x-auto py-1">
+                {progressStats.moduleStats.map(stat => (
+                  <TabsTrigger
+                    key={stat.moduleId}
+                    value={stat.moduleId}
+                    className="text-xs sm:text-sm flex-none min-w-[120px] max-w-[220px]"
+                  >
+                    <div className="text-center min-w-0">
+                      <div className="font-semibold">{stat.completionPercentage}%</div>
+                      <div className="text-xs text-muted-foreground truncate">{stat.moduleName}</div>
+                    </div>
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+
+              {progressStats.moduleStats.map(moduleStat => (
+                <TabsContent key={moduleStat.moduleId} value={moduleStat.moduleId} className="space-y-4 mt-4">
                 {/* Module Progress Bar */}
                 <div>
                   <div className="flex justify-between items-center mb-2 min-w-0">
@@ -277,7 +332,7 @@ export default function TaskProgressSection({ modules, setModules }: TaskProgres
                           {getStatusIcon(task.status)}
                         </button>
                         <div className="flex-1 min-w-0">
-                          <p className="font-medium text-sm break-words">{task.description}</p>
+                          <p className="font-medium text-sm break-words truncate">{task.description}</p>
                           <div className="flex gap-2 mt-1 flex-wrap">
                             {task.category && (
                               <Badge variant="outline" className="text-xs">{task.category}</Badge>
@@ -300,6 +355,7 @@ export default function TaskProgressSection({ modules, setModules }: TaskProgres
               </TabsContent>
             ))}
           </Tabs>
+          </div>
         </CardContent>
       </Card>
 

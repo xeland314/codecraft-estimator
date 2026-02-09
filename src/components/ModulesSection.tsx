@@ -2,8 +2,8 @@
 "use client";
 
 import type * as React from 'react';
-import { useState, useEffect } from 'react';
-import type { Module, Task, TimeUnit, TaskCategory } from '@/types';
+import { useState } from 'react';
+import type { Module, Task, TimeUnit } from '@/types';
 import { TASK_CATEGORIES } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,8 +11,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { PackagePlus, ListChecks, Trash2, PlusCircle, Brain, Loader2, Edit3, Save, Layers } from 'lucide-react';
-import { calculateWeightedAverage, convertToMinutes, formatTime } from '@/lib/timeUtils';
+import { PackagePlus, ListChecks, Trash2, PlusCircle, Brain, Loader2, Edit3, Save } from 'lucide-react';
+import { calculateWeightedAverage, formatTime } from '@/lib/timeUtils';
 import { augmentTasks, type AugmentTasksOutput } from '@/ai/flows/augment-tasks';
 import { useToast } from '@/hooks/use-toast';
 
@@ -23,7 +23,7 @@ interface ModulesSectionProps {
 }
 
 
-export default function ModulesSection({ modules, setModules, apiKey }: ModulesSectionProps) {
+export default function ModulesSection({ modules, setModules, apiKey }: Readonly<ModulesSectionProps>) {
   const [newModuleName, setNewModuleName] = useState('');
 
   const [newTask, setNewTask] = useState<{ [moduleId: string]: Partial<Task> }>({});
@@ -49,11 +49,17 @@ export default function ModulesSection({ modules, setModules, apiKey }: ModulesS
   };
 
   const handleTaskInputChange = (moduleId: string, field: keyof Task, value: string | number, unitFieldOrCategory?: boolean) => {
+    let fieldValue: string | number | undefined;
+    if (unitFieldOrCategory) {
+      fieldValue = value;
+    } else {
+      fieldValue = value === '' ? undefined : Number(value);
+    }
     setNewTask(prev => ({
       ...prev,
       [moduleId]: {
         ...prev[moduleId],
-        [field]: unitFieldOrCategory ? value : (value === '' ? undefined : Number(value))
+        [field]: fieldValue
       }
     }));
   };
@@ -115,6 +121,7 @@ export default function ModulesSection({ modules, setModules, apiKey }: ModulesS
     }
 
     const weightedAverageTimeInMinutes = calculateWeightedAverage(optimisticTime, mostLikelyTime, pessimisticTime, timeUnit);
+    const existingTask = modules.find(m => m.id === moduleId)?.tasks.find(t => t.id === editingTaskId);
     const updatedTask: Task = {
       id: editingTaskId,
       description,
@@ -123,6 +130,7 @@ export default function ModulesSection({ modules, setModules, apiKey }: ModulesS
       mostLikelyTime,
       timeUnit,
       category: category || undefined,
+      status: existingTask?.status ?? 'pending',
       weightedAverageTimeInMinutes
     };
 

@@ -2,7 +2,7 @@
 
 import type * as React from 'react';
 import { useState } from 'react';
-import type { Module, Task } from '@/types';
+import type { Module } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -12,18 +12,16 @@ import { calculateCriticalPath, hasCyclicDependencies } from '@/lib/criticalPath
 import { suggestDependencies, type SuggestDependenciesOutput } from '@/ai/flows/suggest-dependencies';
 import { useToast } from '@/hooks/use-toast';
 import { formatTime } from '@/lib/timeUtils';
-import { Decimal } from 'decimal.js';
 
 interface CriticalPathSectionProps {
-  modules: Module[];
-  setModules: React.Dispatch<React.SetStateAction<Module[]>>;
-  apiKey: string;
+  readonly modules: Module[];
+  readonly setModules: React.Dispatch<React.SetStateAction<Module[]>>;
+  readonly apiKey: string;
 }
 
 export default function CriticalPathSection({ modules, setModules, apiKey }: CriticalPathSectionProps) {
   const [selectedTaskForDep, setSelectedTaskForDep] = useState<string | null>(null);
   const [selectedPredecessor, setSelectedPredecessor] = useState<string | null>(null);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isSuggestingDeps, setIsSuggestingDeps] = useState(false);
   const { toast } = useToast();
 
@@ -210,9 +208,9 @@ export default function CriticalPathSection({ modules, setModules, apiKey }: Cri
           <h4 className="font-medium">Add Dependency</h4>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="text-sm font-medium">Task</label>
+              <label htmlFor="task-select" className="text-sm font-medium">Task</label>
               <Select value={selectedTaskForDep || ""} onValueChange={setSelectedTaskForDep}>
-                <SelectTrigger>
+                <SelectTrigger id="task-select">
                   <SelectValue placeholder="Select task" />
                 </SelectTrigger>
                 <SelectContent>
@@ -225,9 +223,9 @@ export default function CriticalPathSection({ modules, setModules, apiKey }: Cri
               </Select>
             </div>
             <div>
-              <label className="text-sm font-medium">Predecessor</label>
+              <label htmlFor="predecessor-select" className="text-sm font-medium">Predecessor</label>
               <Select value={selectedPredecessor || ""} onValueChange={setSelectedPredecessor}>
-                <SelectTrigger>
+                <SelectTrigger id="predecessor-select">
                   <SelectValue placeholder="Select predecessor" />
                 </SelectTrigger>
                 <SelectContent>
